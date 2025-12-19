@@ -16,6 +16,30 @@ All implementation phases complete. Release branch `release/v0.1.0` created.
 
 ---
 
+## CRITICAL: docs/ Directory is Severely Out of Date
+
+The `docs/` directory contains **pre-implementation planning specs** that reference non-existent APIs. These must be **rewritten from scratch** to match actual implementation.
+
+| Non-Existent API | Actual Implementation | Affected Files |
+|------------------|----------------------|----------------|
+| `PostgresStore` | Only `MemoryStore`, `SQLiteStore` exist | OVERVIEW, ARCHITECTURE, API_REFERENCE, TESTING_STRATEGY |
+| `TemporalStore` | Not implemented | OVERVIEW |
+| `ClaudeCLIClient` | `ClaudeCLI` | OVERVIEW, ARCHITECTURE, API_REFERENCE |
+| `NewClaudeCLIClient()` | `NewClaudeCLI()` | API_REFERENCE |
+| `RunWithCheckpointing()` | `Run()` with `WithCheckpointing(store)` option | ALL |
+| `RunWithOptions()` | Just `Run()` with variadic options | API_REFERENCE |
+| `CheckpointStore.Save(runID, nodeID, state)` | `Save(ctx, *Checkpoint)` | OVERVIEW, ARCHITECTURE, API_REFERENCE |
+| `CheckpointStore.Load(runID, nodeID)` | `Load(ctx, runID)` | OVERVIEW, ARCHITECTURE, API_REFERENCE |
+| "Metrics (Future)" | **Implemented** in `observability/metrics.go` | ARCHITECTURE |
+| "Tracing (Future)" | **Implemented** in `observability/tracing.go` | ARCHITECTURE |
+| `WithClaudeBinary()` | `WithClaudePath()` | API_REFERENCE |
+| `MockResponse` struct | Use `WithResponses()`, `WithHandler()` | API_REFERENCE |
+| `Context.Checkpoint()` method | Checkpointing via `Run()` options | OVERVIEW, ARCHITECTURE |
+
+**Decision**: Either rewrite these docs to match implementation, OR delete and consolidate into `CLAUDE.md` hierarchy.
+
+---
+
 ## Your Mission
 
 Conduct a thorough review of the entire codebase to find:
@@ -23,7 +47,7 @@ Conduct a thorough review of the entire codebase to find:
 1. **API Misalignments** - Code that doesn't match documented interfaces
 2. **Claude CLI Issues** - Options or parsing that don't match actual CLI behavior
 3. **Example Bugs** - Examples that won't compile or run correctly
-4. **Documentation Drift** - Docs that don't match implementation
+4. **Documentation Drift** - Docs that don't match implementation (MAJOR - see above)
 5. **Test Gaps** - Missing test coverage for edge cases
 6. **Inconsistencies** - Naming, patterns, or style that varies
 
@@ -91,17 +115,31 @@ Key APIs to validate:
 - `Resume()` and `ResumeFrom()`
 - Context injection (`WithLLM`, `WithCheckpointing`, etc.)
 
-### Round 4: Documentation Alignment
+### Round 4: Documentation Overhaul
 
-For each doc file:
+**The `docs/` directory needs major work:**
 
-| File | Validate |
-|------|----------|
-| `CLAUDE.md` | Matches current structure and APIs |
-| `README.md` | Install, usage, examples all work |
-| `CONTRIBUTING.md` | Build/test commands work |
-| `pkg/*/CLAUDE.md` | Package docs match implementation |
-| `examples/*/README.md` | Match the actual example code |
+1. **Option A - Rewrite**: Update each file to match actual APIs
+2. **Option B - Delete and consolidate**: Move essential content to `CLAUDE.md` files, delete the rest
+
+Recommended: **Option B** - The `CLAUDE.md` hierarchy is cleaner and easier to maintain.
+
+**Files to update/verify:**
+
+| File | Action |
+|------|--------|
+| `CLAUDE.md` | Already updated - verify accuracy |
+| `README.md` | Already updated - verify accuracy |
+| `CONTRIBUTING.md` | Already updated - verify accuracy |
+| `pkg/*/CLAUDE.md` | Already created - verify accuracy |
+| `examples/*/README.md` | Verify they match code |
+| `docs/OVERVIEW.md` | **DELETE or REWRITE** - wrong APIs |
+| `docs/ARCHITECTURE.md` | **DELETE or REWRITE** - wrong APIs |
+| `docs/API_REFERENCE.md` | **DELETE or REWRITE** - wrong APIs |
+| `docs/TESTING_STRATEGY.md` | **REWRITE** - wrong store interface |
+| `docs/IMPLEMENTATION_GUIDE.md` | Keep (historical) or delete |
+| `docs/GO_PATTERNS.md` | Keep (general Go guidance) |
+| `docs/DECISIONS.md` | Already created - keep |
 
 ### Round 5: Test Coverage Analysis
 
@@ -188,6 +226,16 @@ Once all checks pass:
 
 ## Files to Review
 
+### Priority 0: Documentation Cleanup (BLOCKING)
+The `docs/` directory has incorrect API references. Clean this up first:
+- `docs/OVERVIEW.md` - Delete or rewrite completely
+- `docs/ARCHITECTURE.md` - Delete or rewrite completely
+- `docs/API_REFERENCE.md` - Delete or rewrite completely
+- `docs/TESTING_STRATEGY.md` - Update store interface references
+- `docs/IMPLEMENTATION_GUIDE.md` - Keep as historical or delete
+- `docs/GO_PATTERNS.md` - Keep (general Go patterns)
+- `docs/DECISIONS.md` - Keep (already accurate)
+
 ### Priority 1: LLM Integration
 - `pkg/flowgraph/llm/claude_cli.go` - CLI integration
 - `pkg/flowgraph/llm/request.go` - Types match CLI output
@@ -201,7 +249,8 @@ Once all checks pass:
 - `pkg/flowgraph/*.go` - Public API consistency
 - `pkg/flowgraph/*_test.go` - Coverage gaps
 
-### Priority 4: Documentation
-- `CLAUDE.md` - Root guide
-- `README.md` - User-facing
-- `pkg/*/CLAUDE.md` - Package guides
+### Priority 4: Documentation Verification
+- `CLAUDE.md` - Root guide (already updated)
+- `README.md` - User-facing (already updated)
+- `pkg/*/CLAUDE.md` - Package guides (already created)
+- `CONTRIBUTING.md` - Development guide (already created)
