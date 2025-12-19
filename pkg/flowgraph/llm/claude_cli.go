@@ -11,13 +11,61 @@ import (
 	"time"
 )
 
+// OutputFormat specifies the CLI output format.
+type OutputFormat string
+
+// Output format constants.
+const (
+	OutputFormatText       OutputFormat = "text"
+	OutputFormatJSON       OutputFormat = "json"
+	OutputFormatStreamJSON OutputFormat = "stream-json"
+)
+
+// PermissionMode specifies how Claude handles tool permissions.
+type PermissionMode string
+
+// Permission mode constants.
+const (
+	PermissionModeDefault           PermissionMode = ""
+	PermissionModeAcceptEdits       PermissionMode = "acceptEdits"
+	PermissionModeBypassPermissions PermissionMode = "bypassPermissions"
+)
+
 // ClaudeCLI implements Client using the Claude CLI binary.
 type ClaudeCLI struct {
-	path         string
-	model        string
-	workdir      string
-	timeout      time.Duration
-	allowedTools []string
+	path    string
+	model   string
+	workdir string
+	timeout time.Duration
+
+	// Output control
+	outputFormat OutputFormat
+	jsonSchema   string
+
+	// Session management
+	sessionID            string
+	continueSession      bool
+	resumeSessionID      string
+	noSessionPersistence bool
+
+	// Tool control
+	allowedTools    []string
+	disallowedTools []string
+
+	// Permissions
+	dangerouslySkipPermissions bool
+	permissionMode             PermissionMode
+	settingSources             []string
+
+	// Context
+	addDirs            []string
+	systemPrompt       string
+	appendSystemPrompt string
+
+	// Budget and limits
+	maxBudgetUSD  float64
+	fallbackModel string
+	maxTurns      int
 }
 
 // ClaudeOption configures ClaudeCLI.
@@ -25,10 +73,12 @@ type ClaudeOption func(*ClaudeCLI)
 
 // NewClaudeCLI creates a new Claude CLI client.
 // Assumes "claude" is available in PATH unless overridden with WithClaudePath.
+// By default uses JSON output format for structured responses with token tracking.
 func NewClaudeCLI(opts ...ClaudeOption) *ClaudeCLI {
 	c := &ClaudeCLI{
-		path:    "claude",
-		timeout: 5 * time.Minute,
+		path:         "claude",
+		timeout:      5 * time.Minute,
+		outputFormat: OutputFormatJSON, // Default to JSON for rich response data
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -56,9 +106,126 @@ func WithTimeout(d time.Duration) ClaudeOption {
 	return func(c *ClaudeCLI) { c.timeout = d }
 }
 
-// WithAllowedTools sets the allowed tools for claude.
+// WithAllowedTools sets the allowed tools for claude (whitelist).
 func WithAllowedTools(tools []string) ClaudeOption {
 	return func(c *ClaudeCLI) { c.allowedTools = tools }
+}
+
+// WithOutputFormat sets the output format (text, json, stream-json).
+// Default is json for structured responses with token tracking.
+func WithOutputFormat(format OutputFormat) ClaudeOption {
+	return func(c *ClaudeCLI) { c.outputFormat = format }
+}
+
+// WithJSONSchema forces structured output matching the given JSON schema.
+func WithJSONSchema(schema string) ClaudeOption {
+	return func(c *ClaudeCLI) { c.jsonSchema = schema }
+}
+
+// WithSessionID sets a specific session ID for conversation tracking.
+func WithSessionID(id string) ClaudeOption {
+	return func(c *ClaudeCLI) { c.sessionID = id }
+}
+
+// WithContinue continues the most recent session.
+func WithContinue() ClaudeOption {
+	return func(c *ClaudeCLI) { c.continueSession = true }
+}
+
+// WithResume resumes a specific session by ID.
+func WithResume(sessionID string) ClaudeOption {
+	return func(c *ClaudeCLI) { c.resumeSessionID = sessionID }
+}
+
+// WithNoSessionPersistence disables saving session data.
+func WithNoSessionPersistence() ClaudeOption {
+	return func(c *ClaudeCLI) { c.noSessionPersistence = true }
+}
+
+// WithDisallowedTools sets the tools to disallow (blacklist).
+func WithDisallowedTools(tools []string) ClaudeOption {
+	return func(c *ClaudeCLI) { c.disallowedTools = tools }
+}
+
+// WithDangerouslySkipPermissions skips all permission prompts.
+// Use this for non-interactive execution in trusted environments.
+// WARNING: This allows Claude to execute any tools without confirmation.
+func WithDangerouslySkipPermissions() ClaudeOption {
+	return func(c *ClaudeCLI) { c.dangerouslySkipPermissions = true }
+}
+
+// WithPermissionMode sets the permission handling mode.
+func WithPermissionMode(mode PermissionMode) ClaudeOption {
+	return func(c *ClaudeCLI) { c.permissionMode = mode }
+}
+
+// WithSettingSources specifies which setting sources to use.
+// Valid values: "project", "local", "user"
+func WithSettingSources(sources []string) ClaudeOption {
+	return func(c *ClaudeCLI) { c.settingSources = sources }
+}
+
+// WithAddDirs adds directories to Claude's file access scope.
+func WithAddDirs(dirs []string) ClaudeOption {
+	return func(c *ClaudeCLI) { c.addDirs = dirs }
+}
+
+// WithSystemPrompt sets a custom system prompt, replacing the default.
+func WithSystemPrompt(prompt string) ClaudeOption {
+	return func(c *ClaudeCLI) { c.systemPrompt = prompt }
+}
+
+// WithAppendSystemPrompt appends to the system prompt without replacing it.
+func WithAppendSystemPrompt(prompt string) ClaudeOption {
+	return func(c *ClaudeCLI) { c.appendSystemPrompt = prompt }
+}
+
+// WithMaxBudgetUSD sets a maximum spending limit for the session.
+func WithMaxBudgetUSD(amount float64) ClaudeOption {
+	return func(c *ClaudeCLI) { c.maxBudgetUSD = amount }
+}
+
+// WithFallbackModel sets a fallback model to use if the primary is overloaded.
+func WithFallbackModel(model string) ClaudeOption {
+	return func(c *ClaudeCLI) { c.fallbackModel = model }
+}
+
+// WithMaxTurns limits the number of agentic turns in a conversation.
+// A value of 0 means no limit.
+func WithMaxTurns(n int) ClaudeOption {
+	return func(c *ClaudeCLI) { c.maxTurns = n }
+}
+
+// CLIResponse represents the full JSON response from Claude CLI.
+type CLIResponse struct {
+	Type         string                   `json:"type"`
+	Subtype      string                   `json:"subtype"`
+	IsError      bool                     `json:"is_error"`
+	Result       string                   `json:"result"`
+	SessionID    string                   `json:"session_id"`
+	DurationMS   int                      `json:"duration_ms"`
+	DurationAPI  int                      `json:"duration_api_ms"`
+	NumTurns     int                      `json:"num_turns"`
+	TotalCostUSD float64                  `json:"total_cost_usd"`
+	Usage        CLIUsage                 `json:"usage"`
+	ModelUsage   map[string]CLIModelUsage `json:"modelUsage"`
+}
+
+// CLIUsage contains aggregate token usage from the CLI response.
+type CLIUsage struct {
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+}
+
+// CLIModelUsage contains per-model token usage and cost.
+type CLIModelUsage struct {
+	InputTokens              int     `json:"inputTokens"`
+	OutputTokens             int     `json:"outputTokens"`
+	CacheReadInputTokens     int     `json:"cacheReadInputTokens"`
+	CacheCreationInputTokens int     `json:"cacheCreationInputTokens"`
+	CostUSD                  float64 `json:"costUSD"`
 }
 
 // Complete implements Client.
@@ -95,7 +262,8 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req CompletionRequest) (*Compl
 
 // Stream implements Client.
 func (c *ClaudeCLI) Stream(ctx context.Context, req CompletionRequest) (<-chan StreamChunk, error) {
-	args := append(c.buildArgs(req), "--output-format", "stream-json")
+	// Force stream-json output for streaming
+	args := c.buildArgsWithFormat(req, OutputFormatStreamJSON)
 	cmd := exec.CommandContext(ctx, c.path, args...)
 
 	if c.workdir != "" {
@@ -187,12 +355,50 @@ func (c *ClaudeCLI) Stream(ctx context.Context, req CompletionRequest) (<-chan S
 	return ch, nil
 }
 
-// buildArgs constructs CLI arguments from a request.
+// buildArgs constructs CLI arguments from a request using the client's configured format.
 func (c *ClaudeCLI) buildArgs(req CompletionRequest) []string {
-	args := []string{"--print"}
+	return c.buildArgsWithFormat(req, c.outputFormat)
+}
 
-	if req.SystemPrompt != "" {
+// buildArgsWithFormat constructs CLI arguments with a specific output format.
+func (c *ClaudeCLI) buildArgsWithFormat(req CompletionRequest, format OutputFormat) []string {
+	var args []string
+
+	// Always use --print for non-interactive mode
+	args = append(args, "--print")
+
+	// Output format
+	if format != "" && format != OutputFormatText {
+		args = append(args, "--output-format", string(format))
+	}
+
+	// JSON schema for structured output
+	if c.jsonSchema != "" {
+		args = append(args, "--json-schema", c.jsonSchema)
+	}
+
+	// Session management
+	if c.sessionID != "" {
+		args = append(args, "--session-id", c.sessionID)
+	}
+	if c.continueSession {
+		args = append(args, "--continue")
+	}
+	if c.resumeSessionID != "" {
+		args = append(args, "--resume", c.resumeSessionID)
+	}
+	if c.noSessionPersistence {
+		args = append(args, "--no-session-persistence")
+	}
+
+	// System prompt handling
+	if c.systemPrompt != "" {
+		args = append(args, "--system-prompt", c.systemPrompt)
+	} else if req.SystemPrompt != "" {
 		args = append(args, "--system-prompt", req.SystemPrompt)
+	}
+	if c.appendSystemPrompt != "" {
+		args = append(args, "--append-system-prompt", c.appendSystemPrompt)
 	}
 
 	// Model priority: request > client default
@@ -204,13 +410,52 @@ func (c *ClaudeCLI) buildArgs(req CompletionRequest) []string {
 		args = append(args, "--model", model)
 	}
 
+	// Fallback model
+	if c.fallbackModel != "" {
+		args = append(args, "--fallback-model", c.fallbackModel)
+	}
+
+	// Max tokens
 	if req.MaxTokens > 0 {
 		args = append(args, "--max-tokens", fmt.Sprintf("%d", req.MaxTokens))
 	}
 
-	// Allowed tools
+	// Budget limit
+	if c.maxBudgetUSD > 0 {
+		args = append(args, "--max-budget-usd", fmt.Sprintf("%.6f", c.maxBudgetUSD))
+	}
+
+	// Max turns
+	if c.maxTurns > 0 {
+		args = append(args, "--max-turns", fmt.Sprintf("%d", c.maxTurns))
+	}
+
+	// Tool control - allowed (whitelist)
 	for _, tool := range c.allowedTools {
 		args = append(args, "--allowedTools", tool)
+	}
+
+	// Tool control - disallowed (blacklist)
+	for _, tool := range c.disallowedTools {
+		args = append(args, "--disallowed-tools", tool)
+	}
+
+	// Permission handling
+	if c.dangerouslySkipPermissions {
+		args = append(args, "--dangerously-skip-permissions")
+	}
+	if c.permissionMode != "" {
+		args = append(args, "--permission-mode", string(c.permissionMode))
+	}
+
+	// Setting sources
+	if len(c.settingSources) > 0 {
+		args = append(args, "--setting-sources", strings.Join(c.settingSources, ","))
+	}
+
+	// Additional directories
+	for _, dir := range c.addDirs {
+		args = append(args, "--add-dir", dir)
 	}
 
 	// Build prompt from messages
@@ -241,9 +486,17 @@ func (c *ClaudeCLI) buildArgs(req CompletionRequest) []string {
 }
 
 // parseResponse extracts response data from CLI output.
+// Handles both JSON format (rich data) and text format (basic).
 func (c *ClaudeCLI) parseResponse(data []byte) *CompletionResponse {
 	content := strings.TrimSpace(string(data))
 
+	// Try to parse as JSON response
+	var cliResp CLIResponse
+	if err := json.Unmarshal(data, &cliResp); err == nil && cliResp.Type != "" {
+		return c.parseJSONResponse(&cliResp)
+	}
+
+	// Fall back to raw text response
 	return &CompletionResponse{
 		Content:      content,
 		FinishReason: "stop",
@@ -255,6 +508,43 @@ func (c *ClaudeCLI) parseResponse(data []byte) *CompletionResponse {
 			TotalTokens:  0,
 		},
 	}
+}
+
+// parseJSONResponse extracts rich data from a JSON CLI response.
+func (c *ClaudeCLI) parseJSONResponse(cliResp *CLIResponse) *CompletionResponse {
+	resp := &CompletionResponse{
+		Content:   cliResp.Result,
+		SessionID: cliResp.SessionID,
+		CostUSD:   cliResp.TotalCostUSD,
+		NumTurns:  cliResp.NumTurns,
+		Usage: TokenUsage{
+			InputTokens:              cliResp.Usage.InputTokens,
+			OutputTokens:             cliResp.Usage.OutputTokens,
+			TotalTokens:              cliResp.Usage.InputTokens + cliResp.Usage.OutputTokens,
+			CacheCreationInputTokens: cliResp.Usage.CacheCreationInputTokens,
+			CacheReadInputTokens:     cliResp.Usage.CacheReadInputTokens,
+		},
+	}
+
+	// Determine finish reason from response type
+	if cliResp.IsError {
+		resp.FinishReason = "error"
+	} else {
+		resp.FinishReason = "stop"
+	}
+
+	// Get model from modelUsage if available
+	for model := range cliResp.ModelUsage {
+		resp.Model = model
+		break // Use first model found
+	}
+
+	// Fall back to client's configured model
+	if resp.Model == "" {
+		resp.Model = c.model
+	}
+
+	return resp
 }
 
 // isRetryableError checks if an error message indicates a transient error.

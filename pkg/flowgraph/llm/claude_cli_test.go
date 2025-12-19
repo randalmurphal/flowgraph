@@ -119,6 +119,164 @@ func TestClaudeCLI_Options(t *testing.T) {
 	assert.NotNil(t, client)
 }
 
+func TestClaudeCLI_NewOptions(t *testing.T) {
+	// Test output control options
+	t.Run("output format options", func(t *testing.T) {
+		client := llm.NewClaudeCLI(
+			llm.WithOutputFormat(llm.OutputFormatJSON),
+			llm.WithJSONSchema(`{"type": "object", "properties": {"name": {"type": "string"}}}`),
+		)
+		assert.NotNil(t, client)
+	})
+
+	// Test session management options
+	t.Run("session management options", func(t *testing.T) {
+		client := llm.NewClaudeCLI(
+			llm.WithSessionID("test-session"),
+		)
+		assert.NotNil(t, client)
+
+		client = llm.NewClaudeCLI(llm.WithContinue())
+		assert.NotNil(t, client)
+
+		client = llm.NewClaudeCLI(llm.WithResume("prev-session"))
+		assert.NotNil(t, client)
+
+		client = llm.NewClaudeCLI(llm.WithNoSessionPersistence())
+		assert.NotNil(t, client)
+	})
+
+	// Test tool control options
+	t.Run("tool control options", func(t *testing.T) {
+		client := llm.NewClaudeCLI(
+			llm.WithAllowedTools([]string{"read", "write"}),
+			llm.WithDisallowedTools([]string{"bash", "execute"}),
+		)
+		assert.NotNil(t, client)
+	})
+
+	// Test permission options
+	t.Run("permission options", func(t *testing.T) {
+		client := llm.NewClaudeCLI(llm.WithDangerouslySkipPermissions())
+		assert.NotNil(t, client)
+
+		client = llm.NewClaudeCLI(llm.WithPermissionMode(llm.PermissionModeAcceptEdits))
+		assert.NotNil(t, client)
+
+		client = llm.NewClaudeCLI(llm.WithPermissionMode(llm.PermissionModeBypassPermissions))
+		assert.NotNil(t, client)
+
+		client = llm.NewClaudeCLI(llm.WithSettingSources([]string{"project", "local", "user"}))
+		assert.NotNil(t, client)
+	})
+
+	// Test context options
+	t.Run("context options", func(t *testing.T) {
+		client := llm.NewClaudeCLI(
+			llm.WithAddDirs([]string{"/tmp", "/home/user/project"}),
+		)
+		assert.NotNil(t, client)
+
+		client = llm.NewClaudeCLI(llm.WithSystemPrompt("You are a helpful assistant"))
+		assert.NotNil(t, client)
+
+		client = llm.NewClaudeCLI(llm.WithAppendSystemPrompt("Always be concise"))
+		assert.NotNil(t, client)
+	})
+
+	// Test budget options
+	t.Run("budget options", func(t *testing.T) {
+		client := llm.NewClaudeCLI(llm.WithMaxBudgetUSD(5.0))
+		assert.NotNil(t, client)
+
+		client = llm.NewClaudeCLI(llm.WithFallbackModel("haiku"))
+		assert.NotNil(t, client)
+	})
+
+	// Test production configuration (all options combined)
+	t.Run("production configuration", func(t *testing.T) {
+		client := llm.NewClaudeCLI(
+			llm.WithClaudePath("/usr/local/bin/claude"),
+			llm.WithModel("sonnet"),
+			llm.WithWorkdir("/home/user/project"),
+			llm.WithTimeout(10*time.Minute),
+			llm.WithOutputFormat(llm.OutputFormatJSON),
+			llm.WithDangerouslySkipPermissions(),
+			llm.WithSettingSources([]string{"project", "local"}),
+			llm.WithMaxBudgetUSD(1.0),
+			llm.WithFallbackModel("haiku"),
+			llm.WithDisallowedTools([]string{"Write", "Bash"}),
+			llm.WithAppendSystemPrompt("Be extra careful with code changes"),
+		)
+		assert.NotNil(t, client)
+	})
+}
+
+func TestClaudeCLI_OutputFormatConstants(t *testing.T) {
+	// Verify output format constants are accessible
+	assert.Equal(t, llm.OutputFormat("text"), llm.OutputFormatText)
+	assert.Equal(t, llm.OutputFormat("json"), llm.OutputFormatJSON)
+	assert.Equal(t, llm.OutputFormat("stream-json"), llm.OutputFormatStreamJSON)
+}
+
+func TestClaudeCLI_PermissionModeConstants(t *testing.T) {
+	// Verify permission mode constants are accessible
+	assert.Equal(t, llm.PermissionMode(""), llm.PermissionModeDefault)
+	assert.Equal(t, llm.PermissionMode("acceptEdits"), llm.PermissionModeAcceptEdits)
+	assert.Equal(t, llm.PermissionMode("bypassPermissions"), llm.PermissionModeBypassPermissions)
+}
+
+func TestCompletionResponse_NewFields(t *testing.T) {
+	// Test that new fields are accessible on CompletionResponse
+	resp := &llm.CompletionResponse{
+		Content:      "Hello",
+		SessionID:    "session-123",
+		CostUSD:      0.05,
+		NumTurns:     2,
+		FinishReason: "stop",
+		Model:        "sonnet",
+		Usage: llm.TokenUsage{
+			InputTokens:              100,
+			OutputTokens:             50,
+			TotalTokens:              150,
+			CacheCreationInputTokens: 500,
+			CacheReadInputTokens:     200,
+		},
+	}
+
+	assert.Equal(t, "session-123", resp.SessionID)
+	assert.Equal(t, 0.05, resp.CostUSD)
+	assert.Equal(t, 2, resp.NumTurns)
+	assert.Equal(t, 500, resp.Usage.CacheCreationInputTokens)
+	assert.Equal(t, 200, resp.Usage.CacheReadInputTokens)
+}
+
+func TestTokenUsage_Add_WithCacheTokens(t *testing.T) {
+	usage := llm.TokenUsage{
+		InputTokens:              100,
+		OutputTokens:             50,
+		TotalTokens:              150,
+		CacheCreationInputTokens: 500,
+		CacheReadInputTokens:     200,
+	}
+
+	other := llm.TokenUsage{
+		InputTokens:              200,
+		OutputTokens:             100,
+		TotalTokens:              300,
+		CacheCreationInputTokens: 300,
+		CacheReadInputTokens:     100,
+	}
+
+	usage.Add(other)
+
+	assert.Equal(t, 300, usage.InputTokens)
+	assert.Equal(t, 150, usage.OutputTokens)
+	assert.Equal(t, 450, usage.TotalTokens)
+	assert.Equal(t, 800, usage.CacheCreationInputTokens)
+	assert.Equal(t, 300, usage.CacheReadInputTokens)
+}
+
 func TestClaudeCLI_IntegrationSkip(t *testing.T) {
 	// Skip if claude binary not available
 	if _, err := exec.LookPath("claude"); err != nil {
