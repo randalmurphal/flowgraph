@@ -1,6 +1,6 @@
 # flowgraph Implementation Session
 
-**Purpose**: Implement flowgraph Phase 3 (Checkpointing) and Phase 4 (LLM Clients)
+**Purpose**: Implement flowgraph Phase 5 (Observability)
 
 **Philosophy**: Write production-quality Go code. Follow the specs exactly. Test as you go. No shortcuts.
 
@@ -8,163 +8,151 @@
 
 ## Context
 
-flowgraph is a Go library for graph-based LLM workflow orchestration. Phase 1 (Core Graph) and Phase 2 (Conditional) are complete. Your job is to implement checkpointing and LLM clients.
+flowgraph is a Go library for graph-based LLM workflow orchestration. Phases 1-4 are complete. Your job is to implement observability features: structured logging, metrics, and tracing.
 
 ### What's Complete
 
-- **Phase 1**: Core graph engine - `pkg/flowgraph/*.go` (98.2% coverage)
+- **Phase 1**: Core graph engine - `pkg/flowgraph/*.go` (87.8% coverage)
 - **Phase 2**: Conditional edges - included in Phase 1
+- **Phase 3**: Checkpointing - `pkg/flowgraph/checkpoint/` (91.3% coverage)
+- **Phase 4**: LLM Clients - `pkg/flowgraph/llm/` (74.7% coverage)
 - **27 ADRs** in `decisions/` - all architectural decisions locked
 - **10 Feature Specs** in `features/` - detailed behavior specifications
 - **6 Phase Specs** in `phases/` - implementation plans with code skeletons
-- **API Surface** in `knowledge/API_SURFACE.md` - frozen public API
 
 ### What's Ready to Build
 
-- **Phase 3**: Checkpointing (checkpoint store, state persistence, resume)
-- **Phase 4**: LLM Clients (interface, Claude CLI, mock)
-
-These phases can be implemented in parallel.
+- **Phase 5**: Observability (structured logging, OpenTelemetry metrics/tracing)
 
 ---
 
-## Your Task: Implement Phase 3 and/or Phase 4
+## Your Task: Implement Phase 5 Observability
 
-**Goal**: Add checkpointing for crash recovery AND/OR LLM client interface for AI calls.
+**Goal**: Add production-grade observability: structured logging via slog, metrics and tracing via OpenTelemetry.
 
-**Estimated Effort**: 2-3 days per phase
+**Estimated Effort**: 2-3 days
 
-### Phase 3: Checkpointing
+### Files to Create
 
-**Files to Create**:
 ```
-pkg/flowgraph/checkpoint/
-├── store.go       # CheckpointStore interface
-├── checkpoint.go  # Checkpoint type, metadata, serialization
-├── memory.go      # MemoryStore implementation
-├── sqlite.go      # SQLiteStore implementation
-├── store_test.go
-├── memory_test.go
-└── sqlite_test.go
-```
-
-**Key ADRs**:
-- ADR-014: Checkpoint format (JSON with metadata)
-- ADR-015: Checkpoint store (simple CRUD interface)
-- ADR-016: Resume strategy (resume from node after last checkpoint)
-- ADR-017: State serialization (JSON with exported fields)
-
-**Acceptance Criteria**:
-```go
-// Checkpointing enabled
-store := checkpoint.NewMemoryStore()
-result, err := compiled.Run(ctx, state,
-    flowgraph.WithCheckpointing(store),
-    flowgraph.WithRunID("run-123"))
-
-// Resume after crash
-result, err := compiled.Resume(ctx, store, "run-123")
+pkg/flowgraph/observability/
+├── logger.go       # slog integration helpers
+├── metrics.go      # OpenTelemetry metrics
+├── tracing.go      # OpenTelemetry tracing
+├── noop.go         # No-op implementations
+├── logger_test.go
+├── metrics_test.go
+├── tracing_test.go
+└── noop_test.go
 ```
 
-### Phase 4: LLM Clients
+### Files to Modify
 
-**Files to Create**:
 ```
-pkg/flowgraph/llm/
-├── client.go      # LLMClient interface
-├── request.go     # CompletionRequest, Response types
-├── message.go     # Message, Role types
-├── claude_cli.go  # Claude CLI implementation
-├── mock.go        # MockLLM for testing
-├── client_test.go
-├── claude_cli_test.go
-└── mock_test.go
-```
-
-**Key ADRs**:
-- ADR-018: LLM interface (Complete + Stream methods)
-- ADR-019: Context window (user responsibility)
-- ADR-020: Streaming (optional via Stream())
-- ADR-021: Token tracking (in response, aggregate in state)
-
-**Acceptance Criteria**:
-```go
-// LLM client usage in nodes
-client := llm.NewClaudeCLI()
-ctx := flowgraph.NewContext(context.Background(), flowgraph.WithLLM(client))
-
-func myNode(ctx flowgraph.Context, s State) (State, error) {
-    resp, err := ctx.LLM().Complete(ctx, llm.CompletionRequest{
-        Messages: []llm.Message{{Role: llm.RoleUser, Content: "Hello"}},
-    })
-    if err != nil {
-        return s, err
-    }
-    s.Output = resp.Content
-    return s, nil
-}
+pkg/flowgraph/
+├── options.go      # Add WithLogger, WithMetrics, WithTracing
+├── execute.go      # Add observability hooks
 ```
 
 ---
 
 ## Implementation Order
 
-### Option A: Phase 3 First (Checkpointing)
+### Step 1: Logger Helpers (~2 hours)
 
-1. **checkpoint/store.go** (~1 hour) - Interface definition
-2. **checkpoint/checkpoint.go** (~2 hours) - Checkpoint type, serialization
-3. **checkpoint/memory.go** (~2 hours) - In-memory implementation
-4. **checkpoint/sqlite.go** (~3 hours) - SQLite implementation
-5. **execute.go modifications** (~2 hours) - WithCheckpointing, Resume
-6. **Tests** (~3 hours) - Store tests, integration tests
+Create `observability/logger.go` with slog enrichment helpers:
 
-### Option B: Phase 4 First (LLM Clients)
+```go
+// EnrichLogger adds flowgraph context to a logger
+func EnrichLogger(logger *slog.Logger, runID, nodeID string, attempt int) *slog.Logger
 
-1. **llm/client.go** (~1 hour) - Interface definition
-2. **llm/request.go** (~1 hour) - Request/Response types
-3. **llm/message.go** (~30 min) - Message types
-4. **llm/mock.go** (~1 hour) - Mock for testing
-5. **llm/claude_cli.go** (~3 hours) - Claude CLI implementation
-6. **Tests** (~2 hours) - Mock tests, CLI tests
+// LogNodeStart/Complete/Error for structured logging
+func LogNodeStart(logger *slog.Logger, nodeID string)
+func LogNodeComplete(logger *slog.Logger, nodeID string, durationMs float64)
+func LogNodeError(logger *slog.Logger, nodeID string, err error)
+func LogCheckpoint(logger *slog.Logger, nodeID string, sizeBytes int)
+```
 
-### Option C: Parallel Implementation
+### Step 2: OpenTelemetry Metrics (~3 hours)
 
-Run both phases in parallel if you have the context budget.
+Create `observability/metrics.go`:
 
----
+```go
+// Metrics to emit:
+// - flowgraph.node.executions{node_id="..."}
+// - flowgraph.node.latency_ms{node_id="..."}
+// - flowgraph.node.errors{node_id="..."}
+// - flowgraph.graph.runs{success="true|false"}
+// - flowgraph.checkpoint.size_bytes{node_id="..."}
 
-## Detailed Instructions
+func RecordNodeExecution(ctx context.Context, nodeID string, duration time.Duration, err error)
+func RecordGraphRun(ctx context.Context, success bool)
+func RecordCheckpoint(ctx context.Context, nodeID string, sizeBytes int64)
+```
 
-### Phase 3: Read These First
+### Step 3: OpenTelemetry Tracing (~3 hours)
 
-- `.spec/phases/PHASE-3-checkpointing.md` - Complete code skeletons
-- `.spec/features/checkpointing.md` - Checkpoint behavior
-- `.spec/features/resume.md` - Resume behavior
-- `.spec/decisions/014-checkpoint-format.md`
-- `.spec/decisions/015-checkpoint-store.md`
-- `.spec/decisions/016-resume-strategy.md`
+Create `observability/tracing.go`:
 
-### Phase 4: Read These First
+```go
+// Spans created:
+// flowgraph.run (parent span)
+//   ├── flowgraph.node.a
+//   ├── flowgraph.node.b
+//   └── flowgraph.node.c
 
-- `.spec/phases/PHASE-4-llm.md` - Complete code skeletons
-- `.spec/features/llm-client.md` - LLM client behavior
-- `.spec/decisions/018-llm-interface.md`
-- `.spec/decisions/020-streaming.md`
+func StartRunSpan(ctx context.Context, graphName, runID string) (context.Context, trace.Span)
+func StartNodeSpan(ctx context.Context, nodeID string) (context.Context, trace.Span)
+func EndSpanWithError(span trace.Span, err error)
+func AddSpanEvent(ctx context.Context, name string, attrs ...attribute.KeyValue)
+```
+
+### Step 4: No-op Implementations (~30 min)
+
+Create `observability/noop.go` for when observability is disabled:
+
+```go
+type NoopMetrics struct{}
+func (NoopMetrics) RecordNodeExecution(...) {}
+func (NoopMetrics) RecordGraphRun(...) {}
+func (NoopMetrics) RecordCheckpoint(...) {}
+```
+
+### Step 5: Options Integration (~2 hours)
+
+Add to `options.go`:
+
+```go
+func WithLogger(logger *slog.Logger) RunOption
+func WithMetrics(enabled bool) RunOption
+func WithTracing(enabled bool) RunOption
+```
+
+### Step 6: Execute Integration (~2 hours)
+
+Modify `execute.go` to:
+- Start/end run span if tracing enabled
+- Start/end node spans around each node execution
+- Record metrics after each node
+- Log with enriched logger
+
+### Step 7: Tests (~2 hours)
+
+- Logger tests with mock handlers
+- Metrics tests with test meter provider
+- Tracing tests with mock span processor
+- Integration test with full graph execution
 
 ---
 
 ## Key Decisions (Don't Re-Decide)
 
-| Topic | Decision | Reference |
-|-------|----------|-----------|
-| Checkpoint format | JSON with metadata | ADR-014 |
-| Checkpoint timing | After each node | ADR-015 |
-| Resume strategy | From node after last checkpoint | ADR-016 |
-| State serialization | JSON, exported fields only | ADR-017 |
-| LLM interface | Complete + Stream methods | ADR-018 |
-| Context window | User/devflow responsibility | ADR-019 |
-| Streaming | Optional, node decides | ADR-020 |
-| Token tracking | In response, aggregate in state | ADR-021 |
+| Topic | Decision | Notes |
+|-------|----------|-------|
+| Logging library | slog (stdlib) | Go 1.21+, no dependency |
+| Metrics/Tracing | OpenTelemetry | Industry standard |
+| Default state | Disabled | Opt-in via WithLogger/WithMetrics/WithTracing |
+| Overhead | No-op when disabled | No performance impact |
 
 ---
 
@@ -180,9 +168,9 @@ Run both phases in parallel if you have the context budget.
 ### Testing
 
 - Table-driven tests using testify
-- 85% coverage for checkpoint, 80% for llm
+- 85% coverage target
 - Race detection: `go test -race ./...`
-- Test both happy path and error cases
+- Test both enabled and disabled paths
 
 ### Style
 
@@ -192,28 +180,130 @@ Run both phases in parallel if you have the context budget.
 
 ---
 
-## Existing Code to Reference
+## Dependencies to Add
 
-The core package is complete and well-tested. Use it as reference:
+```go
+// go.mod additions
+require (
+    go.opentelemetry.io/otel v1.24.0
+    go.opentelemetry.io/otel/metric v1.24.0
+    go.opentelemetry.io/otel/trace v1.24.0
+)
+```
 
-- **Error patterns**: See `pkg/flowgraph/errors.go`
-- **Interface patterns**: See `pkg/flowgraph/context.go` (Context interface)
-- **Options patterns**: See `pkg/flowgraph/options.go` (functional options)
-- **Test patterns**: See `pkg/flowgraph/*_test.go`
+Note: slog is stdlib (Go 1.21+), no dependency needed.
+
+---
+
+## Acceptance Criteria
+
+### Structured Logging Works
+
+```go
+logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+result, err := compiled.Run(ctx, state,
+    flowgraph.WithLogger(logger),
+    flowgraph.WithRunID("run-123"))
+
+// Logs include: run_id, node_id, duration_ms, errors
+```
+
+### Metrics Work (with OTel provider configured)
+
+```go
+result, err := compiled.Run(ctx, state,
+    flowgraph.WithMetrics(true))
+
+// Metrics emitted:
+// - flowgraph.node.executions{node_id="process"}
+// - flowgraph.node.latency_ms{node_id="process"}
+// - flowgraph.graph.runs{success="true"}
+```
+
+### Tracing Works (with OTel provider configured)
+
+```go
+result, err := compiled.Run(ctx, state,
+    flowgraph.WithTracing(true))
+
+// Spans created in hierarchy:
+// flowgraph.run
+//   ├── flowgraph.node.start
+//   ├── flowgraph.node.process
+//   └── flowgraph.node.end
+```
+
+### No Overhead When Disabled
+
+```go
+// Default - no observability overhead
+result, err := compiled.Run(ctx, state)
+```
+
+---
+
+## Checklist
+
+- [ ] observability/logger.go with slog helpers
+- [ ] observability/metrics.go with OTel metrics
+- [ ] observability/tracing.go with OTel tracing
+- [ ] observability/noop.go with no-op implementations
+- [ ] WithLogger RunOption
+- [ ] WithMetrics RunOption
+- [ ] WithTracing RunOption
+- [ ] Execute integration (spans, metrics, logging hooks)
+- [ ] All tests passing
+- [ ] 85% coverage achieved
+- [ ] No race conditions
+- [ ] go.mod updated with OTel dependencies
+
+---
+
+## Reference Code
+
+### Existing Options Pattern (options.go)
+
+```go
+func WithCheckpointing(store checkpoint.Store) RunOption {
+    return func(c *runConfig) {
+        c.checkpointStore = store
+    }
+}
+```
+
+### Existing Execute Loop (execute.go)
+
+```go
+func (cg *CompiledGraph[S]) Run(ctx Context, state S, opts ...RunOption) (S, error) {
+    cfg := defaultRunConfig()
+    for _, opt := range opts {
+        opt(&cfg)
+    }
+    // ... execution loop
+}
+```
+
+### Error Wrapping Pattern
+
+```go
+return s, fmt.Errorf("node %s: %w", current, err)
+```
 
 ---
 
 ## First Steps
 
-1. **Decide which phase to start** (3 or 4, or parallel)
+1. **Create directory**: `mkdir -p pkg/flowgraph/observability`
 
-2. **Create directory structure**:
+2. **Start with logger.go** - simplest, no dependencies
+
+3. **Add OTel dependencies** when ready for metrics/tracing:
    ```bash
-   mkdir -p pkg/flowgraph/checkpoint  # Phase 3
-   mkdir -p pkg/flowgraph/llm         # Phase 4
+   go get go.opentelemetry.io/otel@v1.24.0
+   go get go.opentelemetry.io/otel/metric@v1.24.0
+   go get go.opentelemetry.io/otel/trace@v1.24.0
    ```
-
-3. **Start with interfaces** - define the contract first
 
 4. **Write tests as you implement** - don't defer testing
 
@@ -225,74 +315,13 @@ The core package is complete and well-tested. Use it as reference:
 
 ---
 
-## Acceptance Criteria Summary
+## After This Phase
 
-### Phase 3 Complete When:
+When Phase 5 is complete:
 
-```go
-// This works
-store := checkpoint.NewMemoryStore()
-result, err := compiled.Run(ctx, state,
-    flowgraph.WithCheckpointing(store),
-    flowgraph.WithRunID("run-123"))
-
-// And this works
-result, err := compiled.Resume(ctx, store, "run-123")
-```
-
-### Phase 4 Complete When:
-
-```go
-// This works
-client := llm.NewClaudeCLI()
-resp, err := client.Complete(ctx, llm.CompletionRequest{
-    Messages: []llm.Message{{Role: llm.RoleUser, Content: "Hello"}},
-})
-
-// And in nodes
-ctx := flowgraph.NewContext(context.Background(), flowgraph.WithLLM(client))
-// ctx.LLM().Complete(...) works
-```
-
----
-
-## Checklist
-
-### Phase 3: Checkpointing
-
-- [ ] checkpoint/store.go with CheckpointStore interface
-- [ ] checkpoint/checkpoint.go with Checkpoint type
-- [ ] checkpoint/memory.go with MemoryStore
-- [ ] checkpoint/sqlite.go with SQLiteStore
-- [ ] WithCheckpointing RunOption in options.go
-- [ ] Resume() method on CompiledGraph
-- [ ] All tests passing
-- [ ] 85% coverage achieved
-- [ ] No race conditions
-
-### Phase 4: LLM Clients
-
-- [ ] llm/client.go with LLMClient interface
-- [ ] llm/request.go with CompletionRequest/Response
-- [ ] llm/message.go with Message types
-- [ ] llm/mock.go with MockLLM
-- [ ] llm/claude_cli.go with ClaudeCLI
-- [ ] Update context.go to use real LLMClient
-- [ ] All tests passing
-- [ ] 80% coverage achieved
-- [ ] No race conditions
-
----
-
-## After These Phases
-
-When Phases 3 and 4 are complete:
-
-1. Update `.spec/tracking/PROGRESS.md` to mark phases complete
-2. Phase 5 (Observability) can start - adds logging, metrics, tracing
-3. Phase 6 (Polish) comes after all other phases
-
-See `.spec/PLANNING.md` for the full roadmap.
+1. Update `.spec/tracking/PROGRESS.md` to mark phase complete
+2. Phase 6 (Polish) can start - examples, documentation, API review
+3. See `.spec/phases/PHASE-6-polish.md` for final phase spec
 
 ---
 
@@ -300,10 +329,8 @@ See `.spec/PLANNING.md` for the full roadmap.
 
 | Document | Use For |
 |----------|---------|
-| `.spec/phases/PHASE-3-checkpointing.md` | Checkpoint code skeletons |
-| `.spec/phases/PHASE-4-llm.md` | LLM client code skeletons |
-| `.spec/features/*.md` | Detailed behavior specifications |
-| `.spec/decisions/*.md` | Why decisions were made |
-| `.spec/knowledge/API_SURFACE.md` | Exact public API |
-| `.spec/knowledge/TESTING_STRATEGY.md` | Test patterns |
-| `pkg/flowgraph/*.go` | Reference implementation |
+| `.spec/phases/PHASE-5-observability.md` | Complete code skeletons |
+| `.spec/tracking/PROGRESS.md` | Progress tracking |
+| `pkg/flowgraph/*.go` | Reference implementation patterns |
+| `pkg/flowgraph/checkpoint/` | Reference for subpackage structure |
+| `pkg/flowgraph/llm/` | Reference for subpackage structure |

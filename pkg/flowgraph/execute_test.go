@@ -466,7 +466,7 @@ func TestRun_ContextPropagated(t *testing.T) {
 	compiled, err := graph.Compile()
 	require.NoError(t, err)
 
-	ctx := NewContext(context.Background(), WithRunID("test-123"))
+	ctx := NewContext(context.Background(), WithContextRunID("test-123"))
 	_, err = compiled.Run(ctx, State{})
 
 	require.NoError(t, err)
@@ -529,7 +529,7 @@ func TestContext_DefaultValues(t *testing.T) {
 // TestContext_WithOptions tests context configuration options.
 func TestContext_WithOptions(t *testing.T) {
 	ctx := NewContext(context.Background(),
-		WithRunID("custom-run-id"))
+		WithContextRunID("custom-run-id"))
 
 	assert.Equal(t, "custom-run-id", ctx.RunID())
 }

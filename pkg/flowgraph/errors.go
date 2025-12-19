@@ -36,6 +36,47 @@ var (
 	ErrRouterTargetNotFound = errors.New("router returned unknown node")
 )
 
+// Sentinel errors for checkpointing and resume.
+var (
+	// ErrRunIDRequired indicates checkpointing was enabled without a run ID.
+	ErrRunIDRequired = errors.New("run ID required for checkpointing")
+
+	// ErrSerializeState indicates state serialization failed.
+	ErrSerializeState = errors.New("failed to serialize state")
+
+	// ErrDeserializeState indicates state deserialization failed.
+	ErrDeserializeState = errors.New("failed to deserialize state")
+
+	// ErrNoCheckpoints indicates no checkpoints exist for the run.
+	ErrNoCheckpoints = errors.New("no checkpoints found for run")
+
+	// ErrInvalidResumeNode indicates the resume node doesn't exist in the graph.
+	ErrInvalidResumeNode = errors.New("invalid resume node")
+
+	// ErrCheckpointVersionMismatch indicates the checkpoint version is incompatible.
+	ErrCheckpointVersionMismatch = errors.New("checkpoint version mismatch")
+)
+
+// CheckpointError wraps errors from checkpoint operations.
+type CheckpointError struct {
+	// NodeID is the node where checkpointing failed.
+	NodeID string
+	// Op is the operation that failed ("save", "load", "serialize").
+	Op string
+	// Err is the underlying error.
+	Err error
+}
+
+// Error implements the error interface.
+func (e *CheckpointError) Error() string {
+	return fmt.Sprintf("checkpoint %s at node %s: %v", e.Op, e.NodeID, e.Err)
+}
+
+// Unwrap returns the underlying error for errors.Is/As support.
+func (e *CheckpointError) Unwrap() error {
+	return e.Err
+}
+
 // NodeError wraps an error with node context.
 // It provides information about which node failed and what operation was attempted.
 type NodeError struct {

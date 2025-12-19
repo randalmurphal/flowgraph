@@ -4,18 +4,18 @@
 
 ---
 
-## Current Status: Phase 1 Complete, Phase 3-4 Ready
+## Current Status: Phases 1-4 Complete, Phase 5 Ready
 
-**Core graph engine is implemented and tested.** Ready to add checkpointing and LLM clients.
+**Core graph engine, checkpointing, and LLM clients are implemented and tested.** Ready to add observability.
 
 | Phase | Status | Spec |
 |-------|--------|------|
-| Phase 1: Core Graph | ✅ Complete (98.2% coverage) | `.spec/phases/PHASE-1-core.md` |
+| Phase 1: Core Graph | ✅ Complete (87.8% coverage) | `.spec/phases/PHASE-1-core.md` |
 | Phase 2: Conditional | ✅ Complete (included in P1) | `.spec/phases/PHASE-2-conditional.md` |
-| Phase 3: Checkpointing | **Ready to Start** | `.spec/phases/PHASE-3-checkpointing.md` |
-| Phase 4: LLM Clients | **Ready to Start** | `.spec/phases/PHASE-4-llm.md` |
-| Phase 5: Observability | Blocked (needs P3-4) | `.spec/phases/PHASE-5-observability.md` |
-| Phase 6: Polish | Blocked (needs all) | `.spec/phases/PHASE-6-polish.md` |
+| Phase 3: Checkpointing | ✅ Complete (91.3% coverage) | `.spec/phases/PHASE-3-checkpointing.md` |
+| Phase 4: LLM Clients | ✅ Complete (74.7% coverage) | `.spec/phases/PHASE-4-llm.md` |
+| Phase 5: Observability | **Ready to Start** | `.spec/phases/PHASE-5-observability.md` |
+| Phase 6: Polish | Blocked (needs P5) | `.spec/phases/PHASE-6-polish.md` |
 
 **Start here**: `.spec/SESSION_PROMPT.md` for implementation handoff.
 
@@ -33,8 +33,28 @@
 | `graph.go` | Graph[S] builder (AddNode, AddEdge, etc.) | ✅ |
 | `compile.go` | Compile() with validation | ✅ |
 | `compiled.go` | CompiledGraph[S] immutable type | ✅ |
-| `execute.go` | Run() execution loop | ✅ |
-| `options.go` | RunOption (WithMaxIterations) | ✅ |
+| `execute.go` | Run() execution loop with checkpointing | ✅ |
+| `options.go` | RunOptions (WithCheckpointing, WithRunID, etc.) | ✅ |
+| `resume.go` | Resume() and ResumeFrom() methods | ✅ |
+
+### Checkpoint Package (`pkg/flowgraph/checkpoint/`)
+
+| File | Purpose | Status |
+|------|---------|--------|
+| `store.go` | CheckpointStore interface | ✅ |
+| `checkpoint.go` | Checkpoint type, JSON serialization | ✅ |
+| `memory.go` | MemoryStore (in-memory, for testing) | ✅ |
+| `sqlite.go` | SQLiteStore (persistent, for production) | ✅ |
+
+### LLM Package (`pkg/flowgraph/llm/`)
+
+| File | Purpose | Status |
+|------|---------|--------|
+| `client.go` | Client interface (Complete, Stream) | ✅ |
+| `request.go` | CompletionRequest, CompletionResponse types | ✅ |
+| `errors.go` | Error type with Retryable flag | ✅ |
+| `mock.go` | MockClient for testing | ✅ |
+| `claude_cli.go` | ClaudeCLI implementation | ✅ |
 
 ### Working Features
 
@@ -46,10 +66,16 @@
 - ✅ Context cancellation/timeout
 - ✅ Max iterations protection
 - ✅ Error wrapping with node context
+- ✅ Checkpoint persistence (SQLite, Memory)
+- ✅ Resume from checkpoint after crash
+- ✅ LLM client interface with streaming
+- ✅ Claude CLI integration
+- ✅ MockClient for testing
 
-### Usage Example
+### Usage Examples
 
 ```go
+// Basic graph execution
 graph := flowgraph.NewGraph[Counter]().
     AddNode("inc1", increment).
     AddNode("inc2", increment).
@@ -63,43 +89,53 @@ result, _ := compiled.Run(ctx, Counter{Value: 0})
 // result.Value == 2
 ```
 
+```go
+// With checkpointing
+store := checkpoint.NewMemoryStore()
+result, err := compiled.Run(ctx, state,
+    flowgraph.WithCheckpointing(store),
+    flowgraph.WithRunID("run-123"))
+
+// Resume after crash
+result, err := compiled.Resume(ctx, store, "run-123")
+```
+
+```go
+// With LLM client
+client := llm.NewClaudeCLI()
+ctx := flowgraph.NewContext(context.Background(), flowgraph.WithLLM(client))
+
+func myNode(ctx flowgraph.Context, s State) (State, error) {
+    resp, err := ctx.LLM().Complete(ctx, llm.CompletionRequest{
+        Messages: []llm.Message{{Role: llm.RoleUser, Content: "Hello"}},
+    })
+    // ...
+}
+```
+
 ---
 
 ## What's Next
 
-### Phase 3: Checkpointing
+### Phase 5: Observability
 
-Add persistent state checkpoints for crash recovery.
-
-**Files to create**:
-```
-pkg/flowgraph/checkpoint/
-├── store.go       # CheckpointStore interface
-├── checkpoint.go  # Checkpoint type, serialization
-├── memory.go      # MemoryStore implementation
-├── sqlite.go      # SQLiteStore implementation
-└── *_test.go
-```
-
-**Key ADRs**: ADR-014 (format), ADR-015 (store), ADR-016 (resume)
-
-### Phase 4: LLM Clients
-
-Add LLM client interface and implementations.
+Add production-grade observability: structured logging, metrics, and tracing.
 
 **Files to create**:
 ```
-pkg/flowgraph/llm/
-├── client.go      # LLMClient interface
-├── request.go     # CompletionRequest, Response
-├── claude_cli.go  # Claude CLI implementation
-├── mock.go        # MockLLM for testing
+pkg/flowgraph/observability/
+├── logger.go     # slog integration helpers
+├── metrics.go    # OpenTelemetry metrics
+├── tracing.go    # OpenTelemetry tracing
+├── noop.go       # No-op implementations
 └── *_test.go
 ```
 
-**Key ADRs**: ADR-018 (interface), ADR-020 (streaming)
-
-**Note**: Phases 3 and 4 can run in parallel.
+**Key features**:
+- Structured logging via slog
+- OpenTelemetry metrics (node executions, latency, errors)
+- OpenTelemetry tracing (spans for runs and nodes)
+- No-op implementations for disabled state
 
 ---
 
@@ -110,10 +146,11 @@ flowgraph/
 ├── CLAUDE.md              # This file
 ├── go.mod                 # Module definition
 ├── pkg/flowgraph/         # Main package
-│   ├── *.go               # Core implementation (Phase 1)
-│   ├── *_test.go          # Tests (97 tests, 98.2% coverage)
-│   ├── checkpoint/        # TODO: Phase 3
-│   └── llm/               # TODO: Phase 4
+│   ├── *.go               # Core implementation
+│   ├── *_test.go          # Core tests
+│   ├── checkpoint/        # ✅ Checkpoint package
+│   ├── llm/               # ✅ LLM client package
+│   └── observability/     # TODO: Phase 5
 ├── docs/                  # User documentation
 │   ├── OVERVIEW.md
 │   ├── ARCHITECTURE.md
@@ -140,7 +177,10 @@ flowgraph/
 | Execution | Synchronous (parallel in v2) | ADR-010 |
 | Panics | Recover, convert to PanicError | ADR-011 |
 | Checkpoint format | JSON with metadata | ADR-014 |
+| Checkpoint store | Simple CRUD interface | ADR-015 |
+| Resume strategy | From node after last checkpoint | ADR-016 |
 | LLM interface | Complete + Stream methods | ADR-018 |
+| Streaming | Optional, node decides | ADR-020 |
 
 All 27 ADRs are in `.spec/decisions/`.
 
@@ -157,7 +197,10 @@ go test -coverprofile=coverage.out ./pkg/flowgraph/...
 go tool cover -func=coverage.out
 ```
 
-**Current Coverage**: 98.2% (target: 90%)
+**Current Coverage**:
+- flowgraph: 87.8%
+- checkpoint: 91.3%
+- llm: 74.7%
 
 ---
 
@@ -180,7 +223,6 @@ Before any phase is complete:
 |-----|---------|
 | `.spec/SESSION_PROMPT.md` | Next implementation handoff |
 | `.spec/tracking/PROGRESS.md` | Detailed progress tracking |
-| `.spec/phases/PHASE-3-checkpointing.md` | Next phase spec |
-| `.spec/phases/PHASE-4-llm.md` | Parallel phase spec |
+| `.spec/phases/PHASE-5-observability.md` | Next phase spec |
 | `.spec/knowledge/API_SURFACE.md` | Complete public API |
 | `.spec/knowledge/TESTING_STRATEGY.md` | Test patterns |

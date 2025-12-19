@@ -5,6 +5,8 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
+	"github.com/rmurphy/flowgraph/pkg/flowgraph/checkpoint"
+	"github.com/rmurphy/flowgraph/pkg/flowgraph/llm"
 )
 
 // Context provides execution context to nodes.
@@ -23,11 +25,11 @@ type Context interface {
 
 	// LLM returns the LLM client, or nil if not configured.
 	// Nodes should check for nil before using.
-	LLM() LLMClient
+	LLM() llm.Client
 
 	// Checkpointer returns the checkpoint store, or nil if not configured.
 	// Nodes should check for nil before using.
-	Checkpointer() CheckpointStore
+	Checkpointer() checkpoint.Store
 
 	// Metadata
 
@@ -43,25 +45,13 @@ type Context interface {
 	Attempt() int
 }
 
-// LLMClient is the interface for LLM providers.
-// Defined here as a placeholder; full implementation in Phase 4.
-type LLMClient interface {
-	// Methods will be defined in Phase 4
-}
-
-// CheckpointStore is the interface for checkpoint persistence.
-// Defined here as a placeholder; full implementation in Phase 3.
-type CheckpointStore interface {
-	// Methods will be defined in Phase 3
-}
-
 // executionContext is the internal implementation of Context.
 type executionContext struct {
 	context.Context
 
 	logger       *slog.Logger
-	llm          LLMClient
-	checkpointer CheckpointStore
+	llmClient    llm.Client
+	checkpointer checkpoint.Store
 	runID        string
 	nodeID       string
 	attempt      int
@@ -73,12 +63,12 @@ func (c *executionContext) Logger() *slog.Logger {
 }
 
 // LLM returns the LLM client.
-func (c *executionContext) LLM() LLMClient {
-	return c.llm
+func (c *executionContext) LLM() llm.Client {
+	return c.llmClient
 }
 
 // Checkpointer returns the checkpoint store.
-func (c *executionContext) Checkpointer() CheckpointStore {
+func (c *executionContext) Checkpointer() checkpoint.Store {
 	return c.checkpointer
 }
 
@@ -109,22 +99,24 @@ func WithLogger(logger *slog.Logger) ContextOption {
 }
 
 // WithLLM sets the LLM client for the context.
-func WithLLM(client LLMClient) ContextOption {
+func WithLLM(client llm.Client) ContextOption {
 	return func(c *executionContext) {
-		c.llm = client
+		c.llmClient = client
 	}
 }
 
 // WithCheckpointer sets the checkpoint store for the context.
-func WithCheckpointer(store CheckpointStore) ContextOption {
+func WithCheckpointer(store checkpoint.Store) ContextOption {
 	return func(c *executionContext) {
 		c.checkpointer = store
 	}
 }
 
-// WithRunID sets the run identifier for the context.
+// WithContextRunID sets the run identifier for the context.
 // If not set, a UUID will be auto-generated.
-func WithRunID(id string) ContextOption {
+// This is used for logging and tracing. For checkpointing, use
+// WithRunID() as a RunOption with Run().
+func WithContextRunID(id string) ContextOption {
 	return func(c *executionContext) {
 		c.runID = id
 	}
@@ -138,7 +130,7 @@ func WithRunID(id string) ContextOption {
 //
 //	ctx := flowgraph.NewContext(context.Background(),
 //	    flowgraph.WithLogger(myLogger),
-//	    flowgraph.WithRunID("run-123"))
+//	    flowgraph.WithContextRunID("run-123"))
 func NewContext(ctx context.Context, opts ...ContextOption) Context {
 	ec := &executionContext{
 		Context: ctx,
@@ -160,7 +152,7 @@ func (c *executionContext) withNodeID(nodeID string) *executionContext {
 	return &executionContext{
 		Context:      c.Context,
 		logger:       c.logger.With("run_id", c.runID, "node_id", nodeID, "attempt", c.attempt),
-		llm:          c.llm,
+		llmClient:    c.llmClient,
 		checkpointer: c.checkpointer,
 		runID:        c.runID,
 		nodeID:       nodeID,
@@ -174,7 +166,7 @@ func (c *executionContext) withAttempt(attempt int) *executionContext {
 	return &executionContext{
 		Context:      c.Context,
 		logger:       c.logger,
-		llm:          c.llm,
+		llmClient:    c.llmClient,
 		checkpointer: c.checkpointer,
 		runID:        c.runID,
 		nodeID:       c.nodeID,

@@ -1,8 +1,11 @@
 package flowgraph
 
 import (
+	"encoding/json"
 	"fmt"
 	"runtime/debug"
+
+	"github.com/rmurphy/flowgraph/pkg/flowgraph/checkpoint"
 )
 
 // Run executes the graph with the given initial state.
@@ -35,8 +38,20 @@ func (cg *CompiledGraph[S]) Run(ctx Context, state S, opts ...RunOption) (S, err
 		opt(&cfg)
 	}
 
-	current := cg.entryPoint
+	// Validate checkpointing configuration
+	if cfg.checkpointStore != nil && cfg.runID == "" {
+		return state, ErrRunIDRequired
+	}
+
+	return cg.runFrom(ctx, state, cg.entryPoint, &cfg)
+}
+
+// runFrom executes the graph starting from a specific node.
+// This is used both by Run() and Resume().
+func (cg *CompiledGraph[S]) runFrom(ctx Context, state S, startNode string, cfg *runConfig) (S, error) {
+	current := startNode
 	iterations := 0
+	prevNode := ""
 
 	for current != END {
 		iterations++
@@ -73,10 +88,74 @@ func (cg *CompiledGraph[S]) Run(ctx Context, state S, opts ...RunOption) (S, err
 			return state, err
 		}
 
+		// Checkpoint after successful node execution
+		if cfg.checkpointStore != nil {
+			if err := cg.saveCheckpoint(ctx, cfg, current, prevNode, state, next); err != nil {
+				return state, err
+			}
+		}
+
+		prevNode = current
 		current = next
 	}
 
 	return state, nil
+}
+
+// saveCheckpoint persists the current state after node execution.
+func (cg *CompiledGraph[S]) saveCheckpoint(ctx Context, cfg *runConfig, nodeID, prevNodeID string, state S, nextNode string) error {
+	// Serialize state
+	stateBytes, err := json.Marshal(state)
+	if err != nil {
+		if cfg.checkpointFailureFatal {
+			return &CheckpointError{
+				NodeID: nodeID,
+				Op:     "serialize",
+				Err:    err,
+			}
+		}
+		ctx.Logger().Warn("checkpoint serialization failed",
+			"node", nodeID, "error", err)
+		return nil
+	}
+
+	// Create checkpoint
+	cfg.sequence++
+	cp := checkpoint.New(cfg.runID, nodeID, cfg.sequence, stateBytes, nextNode).
+		WithPrevNode(prevNodeID)
+
+	if ec, ok := ctx.(*executionContext); ok {
+		cp = cp.WithAttempt(ec.attempt)
+	}
+
+	data, err := cp.Marshal()
+	if err != nil {
+		if cfg.checkpointFailureFatal {
+			return &CheckpointError{
+				NodeID: nodeID,
+				Op:     "marshal",
+				Err:    err,
+			}
+		}
+		ctx.Logger().Warn("checkpoint marshal failed",
+			"node", nodeID, "error", err)
+		return nil
+	}
+
+	// Save to store
+	if err := cfg.checkpointStore.Save(cfg.runID, nodeID, data); err != nil {
+		if cfg.checkpointFailureFatal {
+			return &CheckpointError{
+				NodeID: nodeID,
+				Op:     "save",
+				Err:    err,
+			}
+		}
+		ctx.Logger().Warn("checkpoint save failed",
+			"node", nodeID, "error", err)
+	}
+
+	return nil
 }
 
 // executeNode executes a single node with panic recovery.
