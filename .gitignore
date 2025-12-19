@@ -1,0 +1,27 @@
+# Coverage files
+*.out
+coverage.txt
+
+# Build artifacts
+/bin/
+/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test databases (SQLite)
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Temporary files
+/tmp/
