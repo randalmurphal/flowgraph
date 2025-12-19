@@ -11,6 +11,7 @@ import (
 type MemoryStore struct {
 	mu     sync.RWMutex
 	data   map[string]map[string]storedCheckpoint // runID -> nodeID -> checkpoint
+	maxSeq map[string]int                         // runID -> max sequence (O(1) lookup)
 	closed bool
 }
 
@@ -24,7 +25,8 @@ type storedCheckpoint struct {
 // NewMemoryStore creates a new in-memory checkpoint store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		data: make(map[string]map[string]storedCheckpoint),
+		data:   make(map[string]map[string]storedCheckpoint),
+		maxSeq: make(map[string]int),
 	}
 }
 
@@ -41,13 +43,9 @@ func (m *MemoryStore) Save(runID, nodeID string, data []byte) error {
 		m.data[runID] = make(map[string]storedCheckpoint)
 	}
 
-	// Determine sequence number
-	seq := 1
-	for _, cp := range m.data[runID] {
-		if cp.sequence >= seq {
-			seq = cp.sequence + 1
-		}
-	}
+	// Determine sequence number using O(1) lookup
+	m.maxSeq[runID]++
+	seq := m.maxSeq[runID]
 
 	// Copy data to avoid retaining caller's slice
 	stored := make([]byte, len(data))
@@ -145,6 +143,7 @@ func (m *MemoryStore) DeleteRun(runID string) error {
 	}
 
 	delete(m.data, runID)
+	delete(m.maxSeq, runID)
 	return nil
 }
 
@@ -155,6 +154,7 @@ func (m *MemoryStore) Close() error {
 
 	m.closed = true
 	m.data = nil
+	m.maxSeq = nil
 	return nil
 }
 

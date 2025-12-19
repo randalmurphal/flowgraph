@@ -386,6 +386,24 @@ func TestBuildArgsNewOptions(t *testing.T) {
 			contains: []string{"--max-turns", "5"},
 		},
 		{
+			name:     "with tools",
+			client:   NewClaudeCLI(WithTools([]string{"Bash", "Read", "Edit"})),
+			req:      CompletionRequest{Messages: []Message{{Role: RoleUser, Content: "Hi"}}},
+			contains: []string{"--tools", "Bash,Read,Edit"},
+		},
+		{
+			name:     "with tools empty",
+			client:   NewClaudeCLI(WithTools([]string{})),
+			req:      CompletionRequest{Messages: []Message{{Role: RoleUser, Content: "Hi"}}},
+			excludes: []string{"--tools"}, // Empty slice doesn't add the flag
+		},
+		{
+			name:     "with tools single",
+			client:   NewClaudeCLI(WithTools([]string{"Bash"})),
+			req:      CompletionRequest{Messages: []Message{{Role: RoleUser, Content: "Hi"}}},
+			contains: []string{"--tools", "Bash"},
+		},
+		{
 			name: "production configuration",
 			client: NewClaudeCLI(
 				WithModel("sonnet"),

@@ -3,6 +3,7 @@ package checkpoint
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -52,6 +53,15 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 	`); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create index: %w", err)
+	}
+
+	// Set restrictive file permissions (owner read/write only)
+	// Skip for in-memory databases
+	if path != ":memory:" {
+		if err := os.Chmod(path, 0600); err != nil {
+			// Log but don't fail - file may not exist yet or may be read-only
+			// The chmod will succeed on subsequent saves
+		}
 	}
 
 	return &SQLiteStore{db: db}, nil

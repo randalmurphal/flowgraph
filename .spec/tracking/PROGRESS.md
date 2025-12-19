@@ -15,7 +15,7 @@
 | Phase 3: Checkpointing | ✅ Complete | 2025-12-19 | 2025-12-19 | 91.3% coverage |
 | Phase 4: LLM Clients | ✅ Complete | 2025-12-19 | 2025-12-19 | 74.7% coverage (binary-dependent) |
 | Phase 5: Observability | ✅ Complete | 2025-12-19 | 2025-12-19 | 90.6% coverage |
-| Phase 6: Polish | 🟡 Ready | - | - | Can start now |
+| Phase 6: Polish | ✅ Complete | 2025-12-19 | 2025-12-19 | Examples, docs, benchmarks done |
 
 ---
 
@@ -256,14 +256,52 @@ pkg/flowgraph/observability/
 
 ---
 
+## Phase 6: Polish ✅ COMPLETE
+
+**Completed**: 2025-12-19
+**Dependencies**: Phases 1-5 ✅
+
+### Claude CLI Enhancements (Step 0)
+
+- ✅ CLIResponse and ModelUsage types for JSON parsing
+- ✅ Default to `--output-format json` for rich metadata
+- ✅ Full JSON response parsing with token/cost extraction
+- ✅ SessionID, CostUSD, NumTurns in CompletionResponse
+- ✅ CacheCreationInputTokens, CacheReadInputTokens in TokenUsage
+- ✅ WithOutputFormat, WithJSONSchema options
+- ✅ WithSessionID, WithContinue, WithResume, WithNoSessionPersistence options
+- ✅ WithAllowedTools, WithDisallowedTools, WithTools options
+- ✅ WithDangerouslySkipPermissions, WithPermissionMode options
+- ✅ WithSettingSources, WithAddDirs options
+- ✅ WithSystemPrompt, WithAppendSystemPrompt options
+- ✅ WithMaxBudgetUSD, WithFallbackModel, WithMaxTurns options
+- ✅ All options tested
+
+### Documentation (Steps 1-6)
+
+- ✅ `pkg/flowgraph/doc.go` - comprehensive package documentation
+- ✅ `README.md` - complete with features, quick start, examples
+- ✅ `CONTRIBUTING.md` - development setup, code style, PR process
+- ✅ `CHANGELOG.md` - initial release notes
+- ✅ 6 working examples (linear, conditional, loop, checkpointing, llm, observability)
+- ✅ 3 benchmark files (graph, execute, checkpoint)
+- ✅ All examples verified running
+- ✅ All benchmarks verified running cleanly
+
+### Bug Fixes
+
+- ✅ Fixed conditional edge reachability analysis (spurious "unreachable node" warnings)
+
+---
+
 ## Next Actions
 
 1. ✅ ~~Phase 1 implementation~~ DONE
 2. ✅ ~~Phase 3 (Checkpointing)~~ DONE
 3. ✅ ~~Phase 4 (LLM Clients)~~ DONE
 4. ✅ ~~Phase 5 (Observability)~~ DONE
-5. Start Phase 6 (Polish) - examples, documentation, API review
-6. Follow spec in `.spec/phases/PHASE-6-polish.md`
+5. ✅ ~~Phase 6 (Polish)~~ DONE
+6. **All phases complete!** Library is production-ready
 
 ---
 
@@ -306,3 +344,15 @@ pkg/flowgraph/observability/
 - Achieved 90.6% coverage for observability
 - All tests pass with race detection
 - Phase 5 complete, Phase 6 (Polish) ready to start
+
+### Session 5 (2025-12-19): Phase 6 - Polish & Documentation
+
+- Verified all Claude CLI enhancements already implemented (Step 0 complete)
+- Added WithTools option for exact tool set specification
+- Fixed conditional edge reachability analysis (spurious warnings eliminated)
+- Created CHANGELOG.md with comprehensive release notes
+- Verified all 6 examples run correctly without warnings
+- Verified all benchmarks run cleanly (no log spam)
+- Ran full quality checks: tests pass, go vet clean, gofmt clean
+- Updated progress tracking documentation
+- **All phases complete - library is production-ready**

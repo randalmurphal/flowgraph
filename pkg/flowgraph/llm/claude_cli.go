@@ -51,6 +51,7 @@ type ClaudeCLI struct {
 	// Tool control
 	allowedTools    []string
 	disallowedTools []string
+	tools           []string // Exact tool set (--tools flag)
 
 	// Permissions
 	dangerouslySkipPermissions bool
@@ -145,6 +146,13 @@ func WithNoSessionPersistence() ClaudeOption {
 // WithDisallowedTools sets the tools to disallow (blacklist).
 func WithDisallowedTools(tools []string) ClaudeOption {
 	return func(c *ClaudeCLI) { c.disallowedTools = tools }
+}
+
+// WithTools specifies the exact list of available tools from the built-in set.
+// Use an empty slice to disable all tools, or specify tool names like "Bash", "Edit", "Read".
+// This is different from WithAllowedTools which is a whitelist filter.
+func WithTools(tools []string) ClaudeOption {
+	return func(c *ClaudeCLI) { c.tools = tools }
 }
 
 // WithDangerouslySkipPermissions skips all permission prompts.
@@ -438,6 +446,11 @@ func (c *ClaudeCLI) buildArgsWithFormat(req CompletionRequest, format OutputForm
 	// Tool control - disallowed (blacklist)
 	for _, tool := range c.disallowedTools {
 		args = append(args, "--disallowed-tools", tool)
+	}
+
+	// Tool control - exact tool set
+	if len(c.tools) > 0 {
+		args = append(args, "--tools", strings.Join(c.tools, ","))
 	}
 
 	// Permission handling

@@ -160,9 +160,17 @@ func (g *Graph[S]) findReachableNodes() map[string]bool {
 			}
 		}
 
-		// For conditional edges, we can't know all targets at compile time,
-		// but we can mark the node as reachable if it has a conditional edge
-		// Note: We can't determine actual targets without running the router
+		// For conditional edges, we can't know the actual targets at compile time
+		// since they depend on runtime state. The router function could potentially
+		// return any node ID, so we must assume ALL nodes are reachable.
+		if _, hasConditional := g.conditionalEdges[current]; hasConditional {
+			for nodeID := range g.nodes {
+				if !reachable[nodeID] {
+					reachable[nodeID] = true
+					queue = append(queue, nodeID)
+				}
+			}
+		}
 	}
 
 	return reachable

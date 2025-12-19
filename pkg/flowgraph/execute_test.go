@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rmurphy/flowgraph/pkg/flowgraph/checkpoint"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -567,4 +568,216 @@ func TestContext_ValuesFromParent(t *testing.T) {
 	fgCtx := NewContext(parentCtx)
 
 	assert.Equal(t, "value", fgCtx.Value(key))
+}
+
+// TestWithCheckpointFailureFatal_True tests that checkpoint failures stop execution when fatal=true.
+func TestWithCheckpointFailureFatal_True(t *testing.T) {
+	store := &failingCheckpointStore{failOn: "save"}
+
+	graph := NewGraph[Counter]().
+		AddNode("inc1", increment).
+		AddNode("inc2", increment).
+		AddEdge("inc1", "inc2").
+		AddEdge("inc2", END).
+		SetEntry("inc1")
+
+	compiled, err := graph.Compile()
+	require.NoError(t, err)
+
+	_, err = compiled.Run(testCtx(), Counter{Value: 0},
+		WithCheckpointing(store),
+		WithRunID("test-run"),
+		WithCheckpointFailureFatal(true))
+
+	// Should error because checkpoint save failed and fatal=true
+	require.Error(t, err)
+	var cpErr *CheckpointError
+	require.ErrorAs(t, err, &cpErr)
+	assert.Equal(t, "inc1", cpErr.NodeID)
+	assert.Equal(t, "save", cpErr.Op)
+}
+
+// TestWithCheckpointFailureFatal_False tests that execution continues when fatal=false.
+func TestWithCheckpointFailureFatal_False(t *testing.T) {
+	store := &failingCheckpointStore{failOn: "save"}
+
+	graph := NewGraph[Counter]().
+		AddNode("inc1", increment).
+		AddNode("inc2", increment).
+		AddEdge("inc1", "inc2").
+		AddEdge("inc2", END).
+		SetEntry("inc1")
+
+	compiled, err := graph.Compile()
+	require.NoError(t, err)
+
+	result, err := compiled.Run(testCtx(), Counter{Value: 0},
+		WithCheckpointing(store),
+		WithRunID("test-run"),
+		WithCheckpointFailureFatal(false))
+
+	// Should succeed even though checkpoint failed
+	require.NoError(t, err)
+	assert.Equal(t, 2, result.Value)
+}
+
+// TestCheckpointFailure_SerializeError tests serialization failure with non-fatal flag.
+func TestCheckpointFailure_SerializeError(t *testing.T) {
+	store := &failingCheckpointStore{} // Won't actually be called due to marshal error
+
+	// Create a state type that can't be marshaled
+	type BadState struct {
+		Fn func() // Functions can't be JSON marshaled
+	}
+
+	badNode := func(ctx Context, s BadState) (BadState, error) {
+		s.Fn = func() {} // Add an unmarshalable field
+		return s, nil
+	}
+
+	graph := NewGraph[BadState]().
+		AddNode("bad", badNode).
+		AddEdge("bad", END).
+		SetEntry("bad")
+
+	compiled, err := graph.Compile()
+	require.NoError(t, err)
+
+	result, err := compiled.Run(testCtx(), BadState{Fn: nil},
+		WithCheckpointing(store),
+		WithRunID("test-run"),
+		WithCheckpointFailureFatal(false))
+
+	// Should succeed because checkpoint failure is non-fatal
+	require.NoError(t, err)
+	assert.NotNil(t, result.Fn)
+}
+
+// TestCheckpointFailure_SerializeError_Fatal tests serialization failure with fatal flag.
+func TestCheckpointFailure_SerializeError_Fatal(t *testing.T) {
+	store := &failingCheckpointStore{}
+
+	// Create a state type that can't be marshaled
+	type BadState struct {
+		Fn func() // Functions can't be JSON marshaled
+	}
+
+	badNode := func(ctx Context, s BadState) (BadState, error) {
+		s.Fn = func() {} // Add an unmarshalable field
+		return s, nil
+	}
+
+	graph := NewGraph[BadState]().
+		AddNode("bad", badNode).
+		AddEdge("bad", END).
+		SetEntry("bad")
+
+	compiled, err := graph.Compile()
+	require.NoError(t, err)
+
+	_, err = compiled.Run(testCtx(), BadState{Fn: nil},
+		WithCheckpointing(store),
+		WithRunID("test-run"),
+		WithCheckpointFailureFatal(true))
+
+	// Should error on serialize failure when fatal=true
+	require.Error(t, err)
+	var cpErr *CheckpointError
+	require.ErrorAs(t, err, &cpErr)
+	assert.Equal(t, "serialize", cpErr.Op)
+}
+
+// TestCheckpointFailure_MarshalError tests marshal failure with non-fatal flag.
+func TestCheckpointFailure_MarshalError(t *testing.T) {
+	// Note: In practice, json.Marshal of checkpoint metadata is unlikely to fail
+	// if state serialization succeeded, but we test the error path anyway
+	store := &failingCheckpointStore{failOn: "save"}
+
+	graph := NewGraph[Counter]().
+		AddNode("inc", increment).
+		AddEdge("inc", END).
+		SetEntry("inc")
+
+	compiled, err := graph.Compile()
+	require.NoError(t, err)
+
+	result, err := compiled.Run(testCtx(), Counter{Value: 5},
+		WithCheckpointing(store),
+		WithRunID("test-run"),
+		WithCheckpointFailureFatal(false))
+
+	// Should succeed because checkpoint save failure is non-fatal
+	require.NoError(t, err)
+	assert.Equal(t, 6, result.Value)
+}
+
+// TestCheckpointFailure_SaveError_Fatal tests save failure with fatal flag.
+func TestCheckpointFailure_SaveError_Fatal(t *testing.T) {
+	store := &failingCheckpointStore{failOn: "save"}
+
+	graph := NewGraph[Counter]().
+		AddNode("inc", increment).
+		AddEdge("inc", END).
+		SetEntry("inc")
+
+	compiled, err := graph.Compile()
+	require.NoError(t, err)
+
+	_, err = compiled.Run(testCtx(), Counter{Value: 5},
+		WithCheckpointing(store),
+		WithRunID("test-run"),
+		WithCheckpointFailureFatal(true))
+
+	// Should error on save failure when fatal=true
+	require.Error(t, err)
+	var cpErr *CheckpointError
+	require.ErrorAs(t, err, &cpErr)
+	assert.Equal(t, "save", cpErr.Op)
+}
+
+// failingCheckpointStore is a mock checkpoint store that fails on specific operations.
+type failingCheckpointStore struct {
+	failOn string // "save", "load", "list", "delete", etc.
+}
+
+func (f *failingCheckpointStore) Save(runID, nodeID string, data []byte) error {
+	if f.failOn == "save" {
+		return errors.New("simulated save failure")
+	}
+	return nil
+}
+
+func (f *failingCheckpointStore) Load(runID, nodeID string) ([]byte, error) {
+	if f.failOn == "load" {
+		return nil, errors.New("simulated load failure")
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (f *failingCheckpointStore) List(runID string) ([]checkpoint.Info, error) {
+	if f.failOn == "list" {
+		return nil, errors.New("simulated list failure")
+	}
+	return nil, nil
+}
+
+func (f *failingCheckpointStore) Delete(runID, nodeID string) error {
+	if f.failOn == "delete" {
+		return errors.New("simulated delete failure")
+	}
+	return nil
+}
+
+func (f *failingCheckpointStore) DeleteRun(runID string) error {
+	if f.failOn == "delete_run" {
+		return errors.New("simulated delete run failure")
+	}
+	return nil
+}
+
+func (f *failingCheckpointStore) Close() error {
+	if f.failOn == "close" {
+		return errors.New("simulated close failure")
+	}
+	return nil
 }

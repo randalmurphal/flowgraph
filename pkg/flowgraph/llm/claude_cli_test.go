@@ -153,6 +153,9 @@ func TestClaudeCLI_NewOptions(t *testing.T) {
 			llm.WithDisallowedTools([]string{"bash", "execute"}),
 		)
 		assert.NotNil(t, client)
+
+		client = llm.NewClaudeCLI(llm.WithTools([]string{"Bash", "Read", "Edit"}))
+		assert.NotNil(t, client)
 	})
 
 	// Test permission options

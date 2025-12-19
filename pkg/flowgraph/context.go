@@ -159,17 +159,3 @@ func (c *executionContext) withNodeID(nodeID string) *executionContext {
 		attempt:      c.attempt,
 	}
 }
-
-// withAttempt returns a new context with the given attempt number set.
-// Used internally for retry logic.
-func (c *executionContext) withAttempt(attempt int) *executionContext {
-	return &executionContext{
-		Context:      c.Context,
-		logger:       c.logger,
-		llmClient:    c.llmClient,
-		checkpointer: c.checkpointer,
-		runID:        c.runID,
-		nodeID:       c.nodeID,
-		attempt:      attempt,
-	}
-}

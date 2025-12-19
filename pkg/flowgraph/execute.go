@@ -194,12 +194,6 @@ func (cg *CompiledGraph[S]) runFromWithObservability(tracingCtx context.Context,
 	return state, nodeCount, nil
 }
 
-// saveCheckpoint persists the current state after node execution.
-// Used by Resume() which doesn't have full observability config.
-func (cg *CompiledGraph[S]) saveCheckpoint(ctx Context, cfg *runConfig, nodeID, prevNodeID string, state S, nextNode string) error {
-	return cg.saveCheckpointWithObservability(ctx, cfg, nodeID, prevNodeID, state, nextNode)
-}
-
 // saveCheckpointWithObservability persists the current state with observability.
 func (cg *CompiledGraph[S]) saveCheckpointWithObservability(ctx Context, cfg *runConfig, nodeID, prevNodeID string, state S, nextNode string) error {
 	// Serialize state
@@ -349,6 +343,6 @@ func (cg *CompiledGraph[S]) nextNode(ctx Context, state S, current string) (stri
 	}
 
 	// For simple edges, take the first one
-	// (Multiple simple edges from one node isn't really supported in Phase 1)
+	// Note: Multiple outgoing edges from one node requires conditional routing
 	return edges[0], nil
 }
