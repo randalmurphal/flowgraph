@@ -143,9 +143,7 @@ type CheckpointStore interface {
 
 **Available stores**:
 - `MemoryStore` - Testing and development
-- `SQLiteStore` - Single-process persistence
-- `PostgresStore` - Production multi-process
-- `TemporalStore` - Durable execution (optional)
+- `SQLiteStore` - Single-process persistence (production-ready)
 
 ---
 
@@ -189,15 +187,18 @@ result, err := compiled.Run(ctx, TicketState{TicketID: "TK-421"})
 For long-running workflows, checkpoint after each node:
 
 ```go
-store := flowgraph.NewPostgresStore(db)
-result, err := compiled.RunWithCheckpointing(ctx, initialState, store)
+store, _ := checkpoint.NewSQLiteStore("./checkpoints.db")
+defer store.Close()
+
+result, err := compiled.Run(ctx, initialState,
+    flowgraph.WithCheckpointing(store),
+    flowgraph.WithRunID("run-123"))
 ```
 
 **Recovery**:
-1. On crash, restart with same `runID`
-2. Load checkpoints for completed nodes
-3. Resume from last checkpoint
-4. Skip already-completed nodes
+```go
+result, err := compiled.Resume(ctx, store, "run-123")
+```
 
 ---
 
@@ -212,11 +213,16 @@ type Context interface {
     // Logging
     Logger() *slog.Logger
 
-    // Checkpointing
-    Checkpoint(state any) error
-
     // LLM operations
-    LLM() LLMClient
+    LLM() llm.Client
+
+    // Checkpointing
+    Checkpointer() checkpoint.Store
+
+    // Run metadata
+    RunID() string
+    NodeID() string
+    Attempt() int
 }
 ```
 
@@ -243,21 +249,18 @@ func generateSpecNode(ctx flowgraph.Context, state TicketState) (TicketState, er
 
 ## LLM Client Interface
 
-Pluggable interface for LLM operations:
+Pluggable interface for LLM operations (in `pkg/flowgraph/llm`):
 
 ```go
-type LLMClient interface {
+type Client interface {
     Complete(ctx context.Context, req CompletionRequest) (*CompletionResponse, error)
     Stream(ctx context.Context, req CompletionRequest) (<-chan StreamChunk, error)
 }
 ```
 
 **Implementations**:
-- `ClaudeCLIClient` - Shells out to `claude` binary
-- `ClaudeAPIClient` - Direct API calls
-- `OpenAIClient` - OpenAI-compatible APIs
-- `OllamaClient` - Local models via Ollama
-- `MockClient` - Testing
+- `ClaudeCLI` - Shells out to `claude` binary (full token/cost tracking)
+- `MockClient` - Testing with configurable responses
 
 **Context management**:
 ```go

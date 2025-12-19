@@ -3,31 +3,42 @@
 > Go library for graph-based LLM orchestration with checkpointing, conditional branching, and multi-model support.
 
 ## Quick Start
-- CLAUDE.md (160 lines) - Project overview, key patterns, quick reference
-- docs/OVERVIEW.md (250 lines) - Vision, core concepts, use cases
+- CLAUDE.md (247 lines) - Project overview, key patterns, quick reference
+- pkg/flowgraph/doc.go (171 lines) - Package documentation with examples
+- docs/OVERVIEW.md (334 lines) - Vision, core concepts, use cases
 
 ## Architecture
-- docs/ARCHITECTURE.md (450 lines) - System design, type definitions, execution model
-- docs/API_REFERENCE.md (350 lines) - Complete public API documentation
+- docs/ARCHITECTURE.md (686 lines) - System design, type definitions, execution model
 
 ## Implementation
-- docs/IMPLEMENTATION_GUIDE.md (280 lines) - Porting from Python, common patterns
-- docs/GO_PATTERNS.md (300 lines) - Go idioms, gotchas, production patterns
-- docs/TESTING_STRATEGY.md (400 lines) - Test patterns, coverage requirements
+- docs/IMPLEMENTATION_GUIDE.md (452 lines) - Porting from Python, common patterns
+- docs/GO_PATTERNS.md (457 lines) - Go idioms, gotchas, production patterns
+- docs/TESTING_STRATEGY.md (597 lines) - Test patterns, coverage requirements
+
+## API Reference
+- .spec/knowledge/API_SURFACE.md - Complete public API documentation
 
 ## By Topic
 
 ### Graph Definition
-- docs/API_REFERENCE.md#graph-builder - AddNode, AddEdge, SetEntry, Compile
+- docs/OVERVIEW.md#core-graph-concepts - Nodes, edges, compilation
 
 ### Execution
-- docs/ARCHITECTURE.md#execution - Run algorithm, checkpointed execution
+- docs/ARCHITECTURE.md#execution-flow - Run algorithm, checkpointed execution
 
 ### Checkpointing
-- docs/ARCHITECTURE.md#checkpoint-stores - Memory, SQLite, Postgres stores
+- docs/OVERVIEW.md#checkpointing - MemoryStore, SQLiteStore
 
 ### LLM Clients
-- docs/ARCHITECTURE.md#llm-clients - Claude CLI, Mock, interface
+- docs/OVERVIEW.md#llm-client-interface - ClaudeCLI, MockClient
 
 ### Testing
 - docs/TESTING_STRATEGY.md - Unit tests, integration tests, coverage
+
+## Examples
+- examples/linear/ - Basic linear execution
+- examples/conditional/ - Conditional branching
+- examples/loop/ - Retry loops
+- examples/checkpointing/ - Crash recovery
+- examples/llm/ - LLM integration
+- examples/observability/ - Logging, metrics, tracing

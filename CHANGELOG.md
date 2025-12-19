@@ -16,7 +16,7 @@ All notable changes to flowgraph are documented in this file.
 - **Conditional Branching** (Phase 2)
   - `AddConditionalEdge` for runtime routing based on state
   - Router functions that return next node ID
-  - Loop support with max iterations protection (default 100)
+  - Loop support with max iterations protection (default 1000)
 
 - **Checkpointing** (Phase 3)
   - `CheckpointStore` interface for pluggable storage

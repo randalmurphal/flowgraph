@@ -77,7 +77,7 @@ Create loops by having conditional edges that return to earlier nodes:
 	    AddEdge("cleanup", flowgraph.END).
 	    SetEntry("attempt")
 
-Loops are protected by max iterations (default 100) to prevent infinite loops.
+Loops are protected by max iterations (default 1000) to prevent infinite loops.
 Configure with WithMaxIterations option.
 
 # Checkpointing

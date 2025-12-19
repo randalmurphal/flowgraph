@@ -97,18 +97,22 @@ type CompiledGraph[S any] struct {
 type Context interface {
     context.Context
     Logger() *slog.Logger
-    Checkpoint(state any) error
-    LLM() LLMClient
+    LLM() llm.Client
+    Checkpointer() checkpoint.Store
+    RunID() string
+    NodeID() string
+    Attempt() int
 }
 
 // executionContext implements Context
 type executionContext struct {
     context.Context
-    logger *slog.Logger
-    store  CheckpointStore
-    runID  string
-    nodeID string
-    llm    LLMClient
+    logger       *slog.Logger
+    llmClient    llm.Client
+    checkpointer checkpoint.Store
+    runID        string
+    nodeID       string
+    attempt      int
 }
 ```
 
@@ -134,8 +138,8 @@ type Checkpoint struct {
 ### LLM Types
 
 ```go
-// LLMClient abstracts LLM operations
-type LLMClient interface {
+// Client abstracts LLM operations (in pkg/flowgraph/llm)
+type Client interface {
     Complete(ctx context.Context, req CompletionRequest) (*CompletionResponse, error)
     Stream(ctx context.Context, req CompletionRequest) (<-chan StreamChunk, error)
 }

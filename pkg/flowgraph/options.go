@@ -45,20 +45,30 @@ func defaultRunConfig() runConfig {
 // RunOption configures execution behavior.
 type RunOption func(*runConfig)
 
+// MaxIterationsLimit is the maximum allowed value for WithMaxIterations.
+// This prevents accidental resource exhaustion from extremely high values.
+const MaxIterationsLimit = 100000
+
 // WithMaxIterations sets the maximum number of node executions.
 // Default: 1000
 //
 // This prevents infinite loops from hanging forever. If a graph
 // exceeds this limit, Run returns ErrMaxIterations.
 //
+// Panics if n <= 0 or n > MaxIterationsLimit (100000).
+//
 // Example:
 //
 //	result, err := compiled.Run(ctx, state, flowgraph.WithMaxIterations(100))
 func WithMaxIterations(n int) RunOption {
+	if n <= 0 {
+		panic("flowgraph: max iterations must be > 0")
+	}
+	if n > MaxIterationsLimit {
+		panic("flowgraph: max iterations exceeds limit (100000)")
+	}
 	return func(c *runConfig) {
-		if n > 0 {
-			c.maxIterations = n
-		}
+		c.maxIterations = n
 	}
 }
 
