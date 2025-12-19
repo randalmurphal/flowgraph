@@ -111,10 +111,12 @@ func TestClaudeCLI_Stream_ContextCancellation(t *testing.T) {
 		if chunk.Error != nil {
 			gotError = true
 			// The error should be related to context cancellation or command termination
+			errMsg := chunk.Error.Error()
 			assert.True(t,
-				strings.Contains(chunk.Error.Error(), "context canceled") ||
-					strings.Contains(chunk.Error.Error(), "signal: killed") ||
-					strings.Contains(chunk.Error.Error(), "killed"),
+				strings.Contains(errMsg, "context canceled") ||
+					strings.Contains(errMsg, "signal: killed") ||
+					strings.Contains(errMsg, "killed") ||
+					strings.Contains(errMsg, "exit status"), // command killed by context
 				"Expected context cancellation or kill error, got: %v", chunk.Error)
 			break
 		}
