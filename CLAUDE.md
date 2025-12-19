@@ -4,6 +4,53 @@
 
 ---
 
+## Current Status: Ready for Implementation
+
+**All specifications are complete.** The `.spec/` directory contains everything needed to implement flowgraph v1.0 without making architectural decisions.
+
+| Phase | Status | Spec |
+|-------|--------|------|
+| Phase 1: Core Graph | **Ready to Start** | `.spec/phases/PHASE-1-core.md` |
+| Phase 2: Conditional | Blocked (needs P1) | `.spec/phases/PHASE-2-conditional.md` |
+| Phase 3: Checkpointing | Blocked (needs P2) | `.spec/phases/PHASE-3-checkpointing.md` |
+| Phase 4: LLM Clients | Ready (after P1) | `.spec/phases/PHASE-4-llm.md` |
+| Phase 5: Observability | Blocked (needs P2) | `.spec/phases/PHASE-5-observability.md` |
+| Phase 6: Polish | Blocked (needs all) | `.spec/phases/PHASE-6-polish.md` |
+
+**Start here**: `.spec/SESSION_PROMPT.md` for implementation handoff.
+
+---
+
+## Specification Structure
+
+```
+.spec/
+├── PLANNING.md              # Implementation phases overview
+├── DECISIONS.md             # Quick reference for 27 ADRs
+├── SESSION_PROMPT.md        # Implementation handoff prompt
+├── decisions/               # 27 Architecture Decision Records
+├── features/                # 10 feature specifications
+│   ├── graph-builder.md
+│   ├── compilation.md
+│   ├── linear-execution.md
+│   ├── conditional-edges.md
+│   ├── loop-execution.md
+│   ├── checkpointing.md
+│   ├── resume.md
+│   ├── llm-client.md
+│   ├── context-interface.md
+│   └── error-handling.md
+├── phases/                  # 6 implementation phases
+├── knowledge/               # Supporting documents
+│   ├── API_SURFACE.md       # Frozen public API
+│   ├── TESTING_STRATEGY.md  # Test patterns
+│   └── DECISIONS-REVISITED.md  # Open questions resolved
+└── tracking/
+    └── PROGRESS.md          # Implementation progress
+```
+
+---
+
 ## Vision
 
 Foundation layer for AI workflow systems. Generic, reusable, suitable for any LLM application. Part of a three-layer ecosystem:
@@ -46,60 +93,65 @@ compiled, err := graph.Compile()
 result, err := compiled.Run(ctx, initialState)
 
 // With checkpointing
-result, err := compiled.RunWithCheckpointing(ctx, initialState, store)
+result, err := compiled.Run(ctx, initialState,
+    flowgraph.WithCheckpointing(store),
+    flowgraph.WithRunID("run-123"))
 ```
 
-**See**: `docs/API_REFERENCE.md` for complete API
+**Complete API**: `.spec/knowledge/API_SURFACE.md`
 
 ---
 
-## Architecture
+## Implementation Guide
 
-```
-Graph Definition → Compile() → CompiledGraph → Run(ctx, state)
-                      ↓
-              Validation:
-              - Entry point exists
-              - All edges reference valid nodes
-              - Path to END exists
-              - Unreachable nodes (warning)
-```
+### Starting Phase 1
 
-**Checkpoint Stores**: Memory, SQLite, Postgres, Temporal (optional)
+1. Read `.spec/phases/PHASE-1-core.md` for exact file list and order
+2. Start with `errors.go` - defines all error types
+3. Continue with `node.go`, `context.go`, `graph.go`, etc.
+4. Follow the code skeletons in the phase spec
+5. Write tests as you go (see `.spec/knowledge/TESTING_STRATEGY.md`)
 
-**LLM Clients**: Claude CLI, Claude API, OpenAI, Ollama
+### Key Decisions (Already Made)
 
-**See**: `docs/ARCHITECTURE.md` for detailed design
+| Decision | Choice | ADR |
+|----------|--------|-----|
+| State management | Pass by value, return new | ADR-001 |
+| Error handling | Sentinel + typed + wrapping | ADR-002 |
+| Validation timing | Panic at build, error at compile | ADR-007 |
+| Execution model | Synchronous (parallel in v2) | ADR-010 |
+| Checkpoint format | JSON with metadata | ADR-014 |
+
+All 27 ADRs are in `.spec/decisions/`.
+
+### Testing Requirements
+
+| Package | Coverage Target |
+|---------|-----------------|
+| flowgraph (core) | 90% |
+| flowgraph/checkpoint | 85% |
+| flowgraph/llm | 80% |
+
+See `.spec/knowledge/TESTING_STRATEGY.md` for patterns.
 
 ---
 
-## Key Patterns
-
-| Pattern | When | Example |
-|---------|------|---------|
-| Linear flow | Sequential steps | `a → b → c → END` |
-| Conditional branch | Decision points | `review → (approved ? create-pr : fix)` |
-| Loop with exit | Retry logic | `implement → review → (pass ? END : implement)` |
-| Parallel nodes | Independent work | Future: fan-out/fan-in |
-
----
-
-## Project Structure
+## Project Structure (Target)
 
 ```
-flowgraph/
+pkg/flowgraph/
 ├── graph.go           # Graph definition, AddNode, AddEdge
 ├── node.go            # Node types, NodeFunc
 ├── edge.go            # Edge types, conditional edges
 ├── compile.go         # Graph compilation, validation
-├── execute.go         # Run, RunWithCheckpointing
+├── execute.go         # Run, Resume
 ├── context.go         # Execution context
 ├── errors.go          # Error types
+├── options.go         # RunOption, ContextOption
 ├── checkpoint/        # Checkpoint store implementations
 │   ├── store.go       # Interface
 │   ├── memory.go
-│   ├── sqlite.go
-│   └── postgres.go
+│   └── sqlite.go
 └── llm/               # LLM client implementations
     ├── client.go      # Interface
     ├── claude_cli.go
@@ -112,41 +164,12 @@ flowgraph/
 
 | Error Type | When | Handling |
 |------------|------|----------|
-| `ErrInvalidNodeID` | Empty/reserved node ID | Fail at AddNode |
-| `ErrDuplicateNode` | Same ID added twice | Fail at AddNode |
-| `ErrNodeNotFound` | Edge references missing node | Fail at Compile |
+| Panic | Empty/reserved node ID, nil function | Fail at AddNode |
 | `ErrNoEntryPoint` | No entry node set | Fail at Compile |
-| `ErrNoPathToEnd` | Node can't reach END | Fail at Compile |
-| `ErrNodeExecution` | Node returns error | Wrapped with node ID |
-
----
-
-## Testing
-
-```bash
-go test -race ./...                    # All tests
-go test -race -tags=integration ./...  # With real DBs
-go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out
-```
-
-**Coverage targets**: 90% for core, 85% for checkpoint stores, 80% for LLM clients
-
-**See**: `docs/TESTING_STRATEGY.md` for test patterns
-
----
-
-## Implementation Status
-
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Graph definition | Planned | Core types |
-| Compilation/validation | Planned | |
-| Linear execution | Planned | |
-| Conditional edges | Planned | |
-| Checkpointing | Planned | Memory first, then SQLite/Postgres |
-| LLM clients | Planned | Claude CLI first |
-| Temporal backend | Future | Durable execution |
-| Parallel nodes | Future | Fan-out/fan-in |
+| `ErrNodeNotFound` | Edge references missing node | Fail at Compile |
+| `ErrNoPathToEnd` | No path to END | Fail at Compile |
+| `NodeError` | Node returns error | Wrapped with node ID |
+| `PanicError` | Node panics | Captured with stack |
 
 ---
 
@@ -156,12 +179,11 @@ go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out
 # Core (minimal)
 go get github.com/stretchr/testify  # Testing
 
-# Checkpoint stores
-go get github.com/mattn/go-sqlite3  # SQLite
-go get github.com/jackc/pgx/v5      # Postgres
+# Checkpoint stores (Phase 3)
+go get modernc.org/sqlite           # Pure Go SQLite
 
-# Optional
-go get go.temporal.io/sdk           # Temporal backend
+# Observability (Phase 5)
+go get go.opentelemetry.io/otel     # Metrics/Tracing
 ```
 
 ---
@@ -170,11 +192,11 @@ go get go.temporal.io/sdk           # Temporal backend
 
 | Doc | Purpose |
 |-----|---------|
-| `docs/OVERVIEW.md` | Detailed vision and concepts |
+| `.spec/PLANNING.md` | Implementation phases |
+| `.spec/DECISIONS.md` | Quick ADR reference |
+| `.spec/knowledge/API_SURFACE.md` | Complete public API |
+| `.spec/knowledge/TESTING_STRATEGY.md` | Test patterns |
 | `docs/ARCHITECTURE.md` | Design decisions, data flow |
-| `docs/API_REFERENCE.md` | Complete public API |
-| `docs/IMPLEMENTATION_GUIDE.md` | Porting from Python patterns |
-| `docs/TESTING_STRATEGY.md` | Test patterns and requirements |
 | `docs/GO_PATTERNS.md` | Go idioms and gotchas |
 
 ---
@@ -183,4 +205,3 @@ go get go.temporal.io/sdk           # Temporal backend
 
 - **devflow**: Dev workflow primitives built on flowgraph
 - **task-keeper**: Commercial product built on devflow
-- **ai-devtools/ensemble**: Python reference implementation
