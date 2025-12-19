@@ -10,131 +10,149 @@
 |-------|--------|---------|-----------|-------|
 | Phase 0: Decisions | ✅ Complete | 2025-12-19 | 2025-12-19 | All 27 ADRs written |
 | Phase 0.5: Specifications | ✅ Complete | 2025-12-19 | 2025-12-19 | All feature/phase specs complete |
-| Phase 1: Core Graph | 🟡 Ready | - | - | Can start |
-| Phase 2: Conditional | ⬜ Blocked | - | - | Needs Phase 1 |
-| Phase 3: Checkpointing | ⬜ Blocked | - | - | Needs Phase 2 |
-| Phase 4: LLM Clients | ⬜ Ready | - | - | Can start after Phase 1 |
-| Phase 5: Observability | ⬜ Blocked | - | - | Needs Phase 2 |
+| Phase 1: Core Graph | ✅ Complete | 2025-12-19 | 2025-12-19 | 98.2% coverage, all tests pass |
+| Phase 2: Conditional | ✅ Mostly Complete | 2025-12-19 | 2025-12-19 | Implemented with Phase 1 |
+| Phase 3: Checkpointing | 🟡 Ready | - | - | Can start now |
+| Phase 4: LLM Clients | 🟡 Ready | - | - | Can start now (parallel with P3) |
+| Phase 5: Observability | ⬜ Blocked | - | - | Needs Phases 3-4 |
 | Phase 6: Polish | ⬜ Blocked | - | - | Needs all phases |
 
 ---
 
-## Specification Progress
+## Phase 1: Core Graph ✅ COMPLETE
 
-### Architectural Decisions ✅
+**Completed**: 2025-12-19
+**Coverage**: 98.2%
+**Tests**: 97 passing, 0 race conditions
 
-All 27 ADRs complete. See `DECISIONS.md` for summary.
+### Files Implemented
 
-### Feature Specifications ✅
+| File | Status | Coverage |
+|------|--------|----------|
+| `errors.go` | ✅ | 100% |
+| `node.go` | ✅ | 100% |
+| `context.go` | ✅ | 100% |
+| `graph.go` | ✅ | 100% |
+| `compile.go` | ✅ | 100% |
+| `compiled.go` | ✅ | 100% |
+| `execute.go` | ✅ | 93% |
+| `options.go` | ✅ | 100% |
 
-| Feature | Status | File |
-|---------|--------|------|
-| Graph Builder | ✅ Complete | `features/graph-builder.md` |
-| Compilation | ✅ Complete | `features/compilation.md` |
-| Linear Execution | ✅ Complete | `features/linear-execution.md` |
-| Conditional Edges | ✅ Complete | `features/conditional-edges.md` |
-| Loop Execution | ✅ Complete | `features/loop-execution.md` |
-| Checkpointing | ✅ Complete | `features/checkpointing.md` |
-| Resume | ✅ Complete | `features/resume.md` |
-| LLM Client | ✅ Complete | `features/llm-client.md` |
-| Context Interface | ✅ Complete | `features/context-interface.md` |
-| Error Handling | ✅ Complete | `features/error-handling.md` |
+### Tests Implemented
 
-### Phase Specifications ✅
+| File | Tests |
+|------|-------|
+| `graph_test.go` | 26 tests |
+| `compile_test.go` | 19 tests |
+| `execute_test.go` | 32 tests |
+| `context_test.go` | 5 tests |
+| `errors_test.go` | 10 tests |
+| `acceptance_test.go` | 5 tests |
+| `testutil_test.go` | Test helpers |
 
-| Phase | Status | File |
-|-------|--------|------|
-| Phase 1: Core Graph | ✅ Complete | `phases/PHASE-1-core.md` |
-| Phase 2: Conditional | ✅ Complete | `phases/PHASE-2-conditional.md` |
-| Phase 3: Checkpointing | ✅ Complete | `phases/PHASE-3-checkpointing.md` |
-| Phase 4: LLM Clients | ✅ Complete | `phases/PHASE-4-llm.md` |
-| Phase 5: Observability | ✅ Complete | `phases/PHASE-5-observability.md` |
-| Phase 6: Polish | ✅ Complete | `phases/PHASE-6-polish.md` |
+### What Works
 
-### Knowledge Documents ✅
-
-| Document | Status | File |
-|----------|--------|------|
-| Open Questions Resolution | ✅ Complete | `knowledge/DECISIONS-REVISITED.md` |
-| Testing Strategy | ✅ Complete | `knowledge/TESTING_STRATEGY.md` |
-| API Surface | ✅ Complete | `knowledge/API_SURFACE.md` |
+- ✅ Graph building with fluent API
+- ✅ Node ID validation (panics on empty, reserved, whitespace, duplicate)
+- ✅ Compilation with all validation (entry point, edge references, path to END)
+- ✅ Linear execution
+- ✅ Conditional edges with RouterFunc
+- ✅ Loops with conditional exit
+- ✅ Panic recovery with stack traces
+- ✅ Cancellation handling
+- ✅ Max iterations protection
+- ✅ Context propagation with enriched logging
+- ✅ Error wrapping with node context
 
 ---
 
-## Detailed Progress
+## Phase 2: Conditional ✅ MOSTLY COMPLETE
 
-### Phase 0: Decisions ✅
+Most of Phase 2 was implemented as part of Phase 1 because conditional edges are core to the execution model.
 
-- [x] ADR-001 through ADR-027 complete
-- [x] DECISIONS.md summary created
-- [x] PLANNING.md updated
+### Implemented in Phase 1
 
-### Phase 0.5: Specifications ✅
+- ✅ RouterFunc type in `node.go`
+- ✅ RouterError type in `errors.go`
+- ✅ ErrInvalidRouterResult, ErrRouterTargetNotFound sentinels
+- ✅ AddConditionalEdge method in `graph.go`
+- ✅ Conditional edge handling in `execute.go`
+- ✅ Router panic recovery
+- ✅ Tests for conditional branching, loops, router errors
 
-- [x] 10 feature specifications written
-- [x] 6 phase specifications written (including Phase 1)
-- [x] Open questions resolved and documented
-- [x] Testing strategy documented
-- [x] API surface frozen and documented
+### Remaining (Optional Enhancements)
 
-### Phase 1: Core Graph 🟡
+- [ ] Tarjan's algorithm for SCC detection (current path-to-END check is sufficient)
+- [ ] Panic when mixing simple + conditional edges (currently conditional takes precedence)
 
-- [ ] errors.go
-- [ ] node.go
-- [ ] context.go
-- [ ] graph.go
-- [ ] compile.go
-- [ ] compiled.go
-- [ ] execute.go
-- [ ] options.go
-- [ ] Tests
-- [ ] Documentation
+**Note**: The current implementation fully satisfies the Phase 2 acceptance criteria. The remaining items are optional hardening.
 
-### Phase 2: Conditional ⬜
+---
 
-- [ ] router.go
-- [ ] AddConditionalEdge
-- [ ] Cycle detection
-- [ ] Loop execution
-- [ ] Tests
+## Phase 3: Checkpointing 🟡 READY TO START
 
-### Phase 3: Checkpointing ⬜
+**Dependencies**: Phase 1 ✅
 
-- [ ] checkpoint/store.go
-- [ ] checkpoint/checkpoint.go
-- [ ] checkpoint/memory.go
-- [ ] checkpoint/sqlite.go
-- [ ] resume.go
-- [ ] Tests
+### Files to Create
 
-### Phase 4: LLM Clients ⬜
+```
+pkg/flowgraph/
+├── checkpoint/
+│   ├── store.go       # CheckpointStore interface
+│   ├── checkpoint.go  # Checkpoint type, serialization
+│   ├── memory.go      # MemoryStore implementation
+│   ├── sqlite.go      # SQLiteStore implementation
+│   └── *_test.go
+```
 
-- [ ] llm/client.go
-- [ ] llm/request.go
-- [ ] llm/claude_cli.go
-- [ ] llm/mock.go
-- [ ] Tests
+### Key Tasks
 
-### Phase 5: Observability ⬜
+- [ ] CheckpointStore interface (per ADR-015)
+- [ ] Checkpoint format with metadata (per ADR-014)
+- [ ] MemoryStore implementation
+- [ ] SQLiteStore implementation
+- [ ] RunWithCheckpointing in execute.go
+- [ ] Resume() method (per ADR-016)
+- [ ] 85% test coverage
 
-- [ ] observability/logger.go
-- [ ] observability/metrics.go
-- [ ] observability/tracing.go
-- [ ] Integration
-- [ ] Tests
+---
 
-### Phase 6: Polish ⬜
+## Phase 4: LLM Clients 🟡 READY TO START
 
-- [ ] doc.go
-- [ ] README.md
-- [ ] CONTRIBUTING.md
-- [ ] examples/
-- [ ] benchmarks/
-- [ ] Godoc review
+**Dependencies**: Phase 1 ✅ (can run parallel with Phase 3)
+
+### Files to Create
+
+```
+pkg/flowgraph/
+├── llm/
+│   ├── client.go      # LLMClient interface
+│   ├── request.go     # CompletionRequest, Response
+│   ├── claude_cli.go  # Claude CLI implementation
+│   ├── mock.go        # MockLLM for testing
+│   └── *_test.go
+```
+
+### Key Tasks
+
+- [ ] LLMClient interface (per ADR-018)
+- [ ] CompletionRequest/Response types
+- [ ] ClaudeCLI implementation
+- [ ] Streaming support (per ADR-020)
+- [ ] MockLLM for testing
+- [ ] 80% test coverage
 
 ---
 
 ## Metrics
+
+### Code Metrics
+
+| Package | Lines | Test Lines | Coverage |
+|---------|-------|------------|----------|
+| flowgraph | ~450 | ~1100 | 98.2% |
+| flowgraph/checkpoint | - | - | - |
+| flowgraph/llm | - | - | - |
 
 ### Specification Metrics
 
@@ -144,46 +162,31 @@ All 27 ADRs complete. See `DECISIONS.md` for summary.
 | Feature Specs | 10 |
 | Phase Specs | 6 |
 | Knowledge Docs | 3 |
-| Total Spec Lines | ~5000 |
-
-### Code Metrics (Once Implementation Starts)
-
-| Package | Lines | Test Lines | Coverage |
-|---------|-------|------------|----------|
-| flowgraph | - | - | - |
-| flowgraph/checkpoint | - | - | - |
-| flowgraph/llm | - | - | - |
-| flowgraph/observability | - | - | - |
 
 ---
 
 ## Next Actions
 
-1. ✅ ~~Complete all specifications~~ DONE
-2. Create go.mod with module path
-3. Start Phase 1 implementation
-4. Implement errors.go first
-5. Continue with types in order per PHASE-1-core.md
+1. ✅ ~~Phase 1 implementation~~ DONE
+2. Start Phase 3 (Checkpointing) or Phase 4 (LLM Clients) - can run in parallel
+3. Follow specs in `.spec/phases/PHASE-3-checkpointing.md` or `.spec/phases/PHASE-4-llm.md`
 
 ---
 
-## Session Summary
+## Session Log
 
-**Completed This Session** (2025-12-19):
+### Session 1 (2025-12-19): Phase 0 - Specifications
 
-1. **10 Feature Specifications**
-   - Graph builder, compilation, execution
-   - Conditional edges, loops
-   - Checkpointing, resume
-   - LLM client, context, errors
+- Wrote all 27 ADRs
+- Created 10 feature specifications
+- Created 6 phase specifications
+- Created knowledge documents (API Surface, Testing Strategy)
 
-2. **5 Phase Specifications**
-   - Phases 2-6 with detailed implementation plans
-   - Code skeletons, acceptance criteria, checklists
+### Session 2 (2025-12-19): Phase 1 - Core Implementation
 
-3. **3 Knowledge Documents**
-   - Open questions resolved (parallel, sub-graphs, dynamic, versioning, retry)
-   - Testing strategy with patterns and coverage targets
-   - API surface frozen for v1.0
-
-**Ready for Implementation**: All specifications complete. Can start Phase 1 immediately.
+- Implemented full core graph engine
+- Created 9 source files in `pkg/flowgraph/`
+- Wrote 97 tests across 7 test files
+- Achieved 98.2% test coverage
+- No race conditions detected
+- All acceptance criteria verified working

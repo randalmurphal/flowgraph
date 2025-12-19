@@ -1,6 +1,6 @@
 # flowgraph Implementation Session
 
-**Purpose**: Implement flowgraph Phase 1 - Core Graph Engine
+**Purpose**: Implement flowgraph Phase 3 (Checkpointing) and Phase 4 (LLM Clients)
 
 **Philosophy**: Write production-quality Go code. Follow the specs exactly. Test as you go. No shortcuts.
 
@@ -8,76 +8,148 @@
 
 ## Context
 
-flowgraph is a Go library for graph-based LLM workflow orchestration. All architectural decisions are made and documented. Your job is to implement, not design.
+flowgraph is a Go library for graph-based LLM workflow orchestration. Phase 1 (Core Graph) and Phase 2 (Conditional) are complete. Your job is to implement checkpointing and LLM clients.
 
 ### What's Complete
 
+- **Phase 1**: Core graph engine - `pkg/flowgraph/*.go` (98.2% coverage)
+- **Phase 2**: Conditional edges - included in Phase 1
 - **27 ADRs** in `decisions/` - all architectural decisions locked
 - **10 Feature Specs** in `features/` - detailed behavior specifications
 - **6 Phase Specs** in `phases/` - implementation plans with code skeletons
 - **API Surface** in `knowledge/API_SURFACE.md` - frozen public API
-- **Testing Strategy** in `knowledge/TESTING_STRATEGY.md` - patterns and targets
 
-### What's Not Started
+### What's Ready to Build
 
-- No Go code exists yet
-- No `go.mod` exists yet
-- No tests exist yet
+- **Phase 3**: Checkpointing (checkpoint store, state persistence, resume)
+- **Phase 4**: LLM Clients (interface, Claude CLI, mock)
+
+These phases can be implemented in parallel.
 
 ---
 
-## Your Task: Implement Phase 1
+## Your Task: Implement Phase 3 and/or Phase 4
 
-**Goal**: Build the core graph engine - definition, compilation, and linear execution.
+**Goal**: Add checkpointing for crash recovery AND/OR LLM client interface for AI calls.
 
-**Estimated Effort**: 2-3 days of focused work
+**Estimated Effort**: 2-3 days per phase
 
-### Files to Create
+### Phase 3: Checkpointing
 
+**Files to Create**:
 ```
-pkg/flowgraph/
-├── errors.go          # Error types and sentinels
-├── node.go            # NodeFunc[S], END constant
-├── context.go         # Context interface and implementation
-├── graph.go           # Graph[S] builder
-├── compile.go         # Compile() and validation
-├── compiled.go        # CompiledGraph[S] type
-├── execute.go         # Run() execution loop
-├── options.go         # RunOption, ContextOption
-├── graph_test.go      # Graph builder tests
-├── compile_test.go    # Compilation tests
-├── execute_test.go    # Execution tests
-└── testutil_test.go   # Shared test helpers
+pkg/flowgraph/checkpoint/
+├── store.go       # CheckpointStore interface
+├── checkpoint.go  # Checkpoint type, metadata, serialization
+├── memory.go      # MemoryStore implementation
+├── sqlite.go      # SQLiteStore implementation
+├── store_test.go
+├── memory_test.go
+└── sqlite_test.go
 ```
 
-### Implementation Order
+**Key ADRs**:
+- ADR-014: Checkpoint format (JSON with metadata)
+- ADR-015: Checkpoint store (simple CRUD interface)
+- ADR-016: Resume strategy (resume from node after last checkpoint)
+- ADR-017: State serialization (JSON with exported fields)
 
-Follow this order exactly (dependencies flow down):
+**Acceptance Criteria**:
+```go
+// Checkpointing enabled
+store := checkpoint.NewMemoryStore()
+result, err := compiled.Run(ctx, state,
+    flowgraph.WithCheckpointing(store),
+    flowgraph.WithRunID("run-123"))
 
-1. **errors.go** (~30 min) - All error types first
-2. **node.go** (~15 min) - NodeFunc and END
-3. **context.go** (~1 hour) - Context interface and basic impl
-4. **graph.go** (~2 hours) - Builder with validation panics
-5. **compile.go** (~3 hours) - Validation logic, path checking
-6. **compiled.go** (~1 hour) - Immutable compiled type
-7. **execute.go** (~3 hours) - Run loop, cancellation, panic recovery
-8. **options.go** (~30 min) - Functional options
-9. **Tests** (~4 hours) - Comprehensive test coverage
+// Resume after crash
+result, err := compiled.Resume(ctx, store, "run-123")
+```
 
-### Detailed Instructions
+### Phase 4: LLM Clients
 
-Read `.spec/phases/PHASE-1-core.md` for:
-- Complete code skeletons
-- Exact function signatures
-- Validation rules
-- Test case examples
+**Files to Create**:
+```
+pkg/flowgraph/llm/
+├── client.go      # LLMClient interface
+├── request.go     # CompletionRequest, Response types
+├── message.go     # Message, Role types
+├── claude_cli.go  # Claude CLI implementation
+├── mock.go        # MockLLM for testing
+├── client_test.go
+├── claude_cli_test.go
+└── mock_test.go
+```
 
-Read `.spec/features/` for behavior details:
-- `graph-builder.md` - Builder API, panic conditions
-- `compilation.md` - Validation order, error aggregation
-- `linear-execution.md` - Run loop, panic recovery, cancellation
-- `error-handling.md` - Error types, wrapping patterns
-- `context-interface.md` - Context services and metadata
+**Key ADRs**:
+- ADR-018: LLM interface (Complete + Stream methods)
+- ADR-019: Context window (user responsibility)
+- ADR-020: Streaming (optional via Stream())
+- ADR-021: Token tracking (in response, aggregate in state)
+
+**Acceptance Criteria**:
+```go
+// LLM client usage in nodes
+client := llm.NewClaudeCLI()
+ctx := flowgraph.NewContext(context.Background(), flowgraph.WithLLM(client))
+
+func myNode(ctx flowgraph.Context, s State) (State, error) {
+    resp, err := ctx.LLM().Complete(ctx, llm.CompletionRequest{
+        Messages: []llm.Message{{Role: llm.RoleUser, Content: "Hello"}},
+    })
+    if err != nil {
+        return s, err
+    }
+    s.Output = resp.Content
+    return s, nil
+}
+```
+
+---
+
+## Implementation Order
+
+### Option A: Phase 3 First (Checkpointing)
+
+1. **checkpoint/store.go** (~1 hour) - Interface definition
+2. **checkpoint/checkpoint.go** (~2 hours) - Checkpoint type, serialization
+3. **checkpoint/memory.go** (~2 hours) - In-memory implementation
+4. **checkpoint/sqlite.go** (~3 hours) - SQLite implementation
+5. **execute.go modifications** (~2 hours) - WithCheckpointing, Resume
+6. **Tests** (~3 hours) - Store tests, integration tests
+
+### Option B: Phase 4 First (LLM Clients)
+
+1. **llm/client.go** (~1 hour) - Interface definition
+2. **llm/request.go** (~1 hour) - Request/Response types
+3. **llm/message.go** (~30 min) - Message types
+4. **llm/mock.go** (~1 hour) - Mock for testing
+5. **llm/claude_cli.go** (~3 hours) - Claude CLI implementation
+6. **Tests** (~2 hours) - Mock tests, CLI tests
+
+### Option C: Parallel Implementation
+
+Run both phases in parallel if you have the context budget.
+
+---
+
+## Detailed Instructions
+
+### Phase 3: Read These First
+
+- `.spec/phases/PHASE-3-checkpointing.md` - Complete code skeletons
+- `.spec/features/checkpointing.md` - Checkpoint behavior
+- `.spec/features/resume.md` - Resume behavior
+- `.spec/decisions/014-checkpoint-format.md`
+- `.spec/decisions/015-checkpoint-store.md`
+- `.spec/decisions/016-resume-strategy.md`
+
+### Phase 4: Read These First
+
+- `.spec/phases/PHASE-4-llm.md` - Complete code skeletons
+- `.spec/features/llm-client.md` - LLM client behavior
+- `.spec/decisions/018-llm-interface.md`
+- `.spec/decisions/020-streaming.md`
 
 ---
 
@@ -85,14 +157,14 @@ Read `.spec/features/` for behavior details:
 
 | Topic | Decision | Reference |
 |-------|----------|-----------|
-| State | Pass by value, return new | ADR-001 |
-| Errors | Sentinel + typed + wrapping | ADR-002 |
-| Context | Custom wrapping context.Context | ADR-003 |
-| Graph | Mutable builder, immutable compiled | ADR-004 |
-| Node signature | `func(Context, S) (S, error)` | ADR-005 |
-| Validation | Panic at build, error at compile | ADR-007 |
-| Panics | Recover, convert to PanicError | ADR-011 |
-| Cancellation | Check between nodes | ADR-012 |
+| Checkpoint format | JSON with metadata | ADR-014 |
+| Checkpoint timing | After each node | ADR-015 |
+| Resume strategy | From node after last checkpoint | ADR-016 |
+| State serialization | JSON, exported fields only | ADR-017 |
+| LLM interface | Complete + Stream methods | ADR-018 |
+| Context window | User/devflow responsibility | ADR-019 |
+| Streaming | Optional, node decides | ADR-020 |
+| Token tracking | In response, aggregate in state | ADR-021 |
 
 ---
 
@@ -108,7 +180,7 @@ Read `.spec/features/` for behavior details:
 ### Testing
 
 - Table-driven tests using testify
-- 90% coverage for core package
+- 85% coverage for checkpoint, 80% for llm
 - Race detection: `go test -race ./...`
 - Test both happy path and error cases
 
@@ -116,26 +188,36 @@ Read `.spec/features/` for behavior details:
 
 - `gofmt -s -w .` before commit
 - `go vet ./...` clean
-- Follow patterns from existing ADRs
+- Follow patterns from existing core code
+
+---
+
+## Existing Code to Reference
+
+The core package is complete and well-tested. Use it as reference:
+
+- **Error patterns**: See `pkg/flowgraph/errors.go`
+- **Interface patterns**: See `pkg/flowgraph/context.go` (Context interface)
+- **Options patterns**: See `pkg/flowgraph/options.go` (functional options)
+- **Test patterns**: See `pkg/flowgraph/*_test.go`
 
 ---
 
 ## First Steps
 
-1. **Create go.mod**:
+1. **Decide which phase to start** (3 or 4, or parallel)
+
+2. **Create directory structure**:
    ```bash
-   cd /home/rmurphy/repos/flowgraph
-   mkdir -p pkg/flowgraph
-   cd pkg/flowgraph
-   go mod init github.com/yourusername/flowgraph
-   go get github.com/stretchr/testify
+   mkdir -p pkg/flowgraph/checkpoint  # Phase 3
+   mkdir -p pkg/flowgraph/llm         # Phase 4
    ```
 
-2. **Create errors.go** following the skeleton in PHASE-1-core.md
+3. **Start with interfaces** - define the contract first
 
-3. **Write tests as you implement** - don't defer testing
+4. **Write tests as you implement** - don't defer testing
 
-4. **Run frequently**:
+5. **Run frequently**:
    ```bash
    go test -race ./...
    go vet ./...
@@ -143,78 +225,72 @@ Read `.spec/features/` for behavior details:
 
 ---
 
-## Acceptance Criteria
+## Acceptance Criteria Summary
 
-Phase 1 is complete when this code works:
+### Phase 3 Complete When:
 
 ```go
-package main
+// This works
+store := checkpoint.NewMemoryStore()
+result, err := compiled.Run(ctx, state,
+    flowgraph.WithCheckpointing(store),
+    flowgraph.WithRunID("run-123"))
 
-import (
-    "context"
-    "fmt"
-    "github.com/yourusername/flowgraph"
-)
-
-type Counter struct {
-    Value int
-}
-
-func increment(ctx flowgraph.Context, s Counter) (Counter, error) {
-    s.Value++
-    return s, nil
-}
-
-func main() {
-    graph := flowgraph.NewGraph[Counter]().
-        AddNode("inc1", increment).
-        AddNode("inc2", increment).
-        AddNode("inc3", increment).
-        AddEdge("inc1", "inc2").
-        AddEdge("inc2", "inc3").
-        AddEdge("inc3", flowgraph.END).
-        SetEntry("inc1")
-
-    compiled, err := graph.Compile()
-    if err != nil {
-        panic(err)
-    }
-
-    ctx := flowgraph.NewContext(context.Background())
-    result, err := compiled.Run(ctx, Counter{Value: 0})
-    if err != nil {
-        panic(err)
-    }
-
-    fmt.Printf("Final count: %d\n", result.Value)  // Output: 3
-}
+// And this works
+result, err := compiled.Resume(ctx, store, "run-123")
 ```
 
-### Checklist
+### Phase 4 Complete When:
 
-- [ ] go.mod created with dependencies
-- [ ] errors.go with all error types
-- [ ] node.go with NodeFunc and END
-- [ ] context.go with Context interface
-- [ ] graph.go with builder methods
-- [ ] compile.go with validation
-- [ ] compiled.go with CompiledGraph
-- [ ] execute.go with Run()
-- [ ] options.go with functional options
-- [ ] All tests passing
-- [ ] 90% coverage achieved
-- [ ] No race conditions
-- [ ] Godoc for all public types
+```go
+// This works
+client := llm.NewClaudeCLI()
+resp, err := client.Complete(ctx, llm.CompletionRequest{
+    Messages: []llm.Message{{Role: llm.RoleUser, Content: "Hello"}},
+})
+
+// And in nodes
+ctx := flowgraph.NewContext(context.Background(), flowgraph.WithLLM(client))
+// ctx.LLM().Complete(...) works
+```
 
 ---
 
-## After Phase 1
+## Checklist
 
-When Phase 1 is complete:
+### Phase 3: Checkpointing
 
-1. Update `.spec/tracking/PROGRESS.md` to mark Phase 1 complete
-2. Phase 2 (Conditional) can start - adds `AddConditionalEdge`
-3. Phase 4 (LLM) can start in parallel - adds LLM client
+- [ ] checkpoint/store.go with CheckpointStore interface
+- [ ] checkpoint/checkpoint.go with Checkpoint type
+- [ ] checkpoint/memory.go with MemoryStore
+- [ ] checkpoint/sqlite.go with SQLiteStore
+- [ ] WithCheckpointing RunOption in options.go
+- [ ] Resume() method on CompiledGraph
+- [ ] All tests passing
+- [ ] 85% coverage achieved
+- [ ] No race conditions
+
+### Phase 4: LLM Clients
+
+- [ ] llm/client.go with LLMClient interface
+- [ ] llm/request.go with CompletionRequest/Response
+- [ ] llm/message.go with Message types
+- [ ] llm/mock.go with MockLLM
+- [ ] llm/claude_cli.go with ClaudeCLI
+- [ ] Update context.go to use real LLMClient
+- [ ] All tests passing
+- [ ] 80% coverage achieved
+- [ ] No race conditions
+
+---
+
+## After These Phases
+
+When Phases 3 and 4 are complete:
+
+1. Update `.spec/tracking/PROGRESS.md` to mark phases complete
+2. Phase 5 (Observability) can start - adds logging, metrics, tracing
+3. Phase 6 (Polish) comes after all other phases
 
 See `.spec/PLANNING.md` for the full roadmap.
 
@@ -224,9 +300,10 @@ See `.spec/PLANNING.md` for the full roadmap.
 
 | Document | Use For |
 |----------|---------|
-| `.spec/phases/PHASE-1-core.md` | Code skeletons, implementation order |
+| `.spec/phases/PHASE-3-checkpointing.md` | Checkpoint code skeletons |
+| `.spec/phases/PHASE-4-llm.md` | LLM client code skeletons |
 | `.spec/features/*.md` | Detailed behavior specifications |
 | `.spec/decisions/*.md` | Why decisions were made |
 | `.spec/knowledge/API_SURFACE.md` | Exact public API |
 | `.spec/knowledge/TESTING_STRATEGY.md` | Test patterns |
-| `docs/GO_PATTERNS.md` | Go idioms to follow |
+| `pkg/flowgraph/*.go` | Reference implementation |
