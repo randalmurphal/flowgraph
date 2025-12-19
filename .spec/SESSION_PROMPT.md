@@ -393,3 +393,49 @@ gofmt -s -d . | tee /dev/stderr | (! grep .)
 - Session management enables multi-turn workflows
 - All documentation should reference the enhanced LLM client features
 - Examples should demonstrate the new options where relevant
+
+---
+
+## IMPORTANT: devflow Dependency
+
+**devflow (../devflow) is BLOCKED waiting for flowgraph Phase 6.**
+
+devflow currently has duplicate LLM code that should be removed and replaced with flowgraph imports. This is blocked until flowgraph has:
+
+### Required for devflow Integration
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Full Claude CLI JSON parsing | Phase 6 | Token/cost extraction |
+| `SessionID` in response | Phase 6 | Multi-turn tracking |
+| `CostUSD` in response | Phase 6 | Budget tracking |
+| `WithSessionID(id)` | Phase 6 | Session management |
+| `WithContinue()` | Phase 6 | Continue last session |
+| `WithResume(id)` | Phase 6 | Resume specific session |
+| `WithMaxTurns(n)` | Phase 6 | Limit turns |
+| `WithSystemPrompt(s)` | Phase 6 | Set system prompt |
+| `WithDisallowedTools(tools)` | Phase 6 | Blacklist tools |
+| `WithDangerouslySkipPermissions()` | Phase 6 | Non-interactive mode |
+| `WithMaxBudgetUSD(amount)` | Phase 6 | Cap spending |
+
+### Features devflow Will Migrate to flowgraph
+
+Once Phase 6 LLM enhancements are done, consider if these should also live in flowgraph:
+
+| Feature | Currently In | Notes |
+|---------|-------------|-------|
+| `ContextBuilder` | devflow | File context aggregation |
+| `PromptLoader` | devflow | Go template prompt loading |
+| `PromptBuilder` | devflow | Programmatic prompt construction |
+
+These are generic LLM utilities, not dev-workflow specific. They probably belong in flowgraph.
+
+### After flowgraph Phase 6
+
+devflow will:
+1. Remove duplicate ClaudeCLI from devflow/claude.go
+2. Import and use flowgraph/llm.Client
+3. Update all workflow nodes to use flowgraph LLM
+4. Either migrate or delete ContextBuilder/PromptLoader
+
+See `../devflow/.spec/INTEGRATION_REQUIREMENTS.md` for the full contract.
