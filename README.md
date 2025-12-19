@@ -12,7 +12,7 @@
 - **Crash recovery** - Checkpoint and resume from any failure point
 - **LLM integration** - Claude CLI support with token tracking and budget controls
 - **Observable** - Structured logging, OpenTelemetry metrics, distributed tracing
-- **Production-ready** - 85%+ test coverage, race-condition free, well-documented
+- **Production-ready** - 90%+ test coverage, race-condition free, well-documented
 
 ## Installation
 

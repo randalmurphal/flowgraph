@@ -119,3 +119,26 @@ func TestMaxIterationsError_Unwrap(t *testing.T) {
 
 	assert.ErrorIs(t, err, ErrMaxIterations)
 }
+
+// TestCheckpointError_Error tests CheckpointError formatting.
+func TestCheckpointError_Error(t *testing.T) {
+	err := &CheckpointError{
+		NodeID: "save-point",
+		Op:     "save",
+		Err:    errors.New("disk full"),
+	}
+
+	assert.Equal(t, "checkpoint save at node save-point: disk full", err.Error())
+}
+
+// TestCheckpointError_Unwrap tests CheckpointError unwrapping.
+func TestCheckpointError_Unwrap(t *testing.T) {
+	underlying := errors.New("underlying")
+	err := &CheckpointError{
+		NodeID: "test",
+		Op:     "serialize",
+		Err:    underlying,
+	}
+
+	assert.ErrorIs(t, err, underlying)
+}

@@ -112,7 +112,7 @@ A connection between nodes. Can be unconditional or conditional.
 graph.AddEdge("fetch", "process")
 
 // Conditional
-graph.AddConditionalEdge("review", func(s TicketState) string {
+graph.AddConditionalEdge("review", func(ctx flowgraph.Context, s TicketState) string {
     if s.Review.Approved {
         return "create-pr"
     }
@@ -232,9 +232,9 @@ type Context interface {
 func generateSpecNode(ctx flowgraph.Context, state TicketState) (TicketState, error) {
     ctx.Logger().Info("generating spec", "ticket", state.TicketID)
 
-    response, err := ctx.LLM().Complete(ctx, flowgraph.CompletionRequest{
-        System:   specSystemPrompt,
-        Messages: []flowgraph.Message{{Role: "user", Content: prompt}},
+    response, err := ctx.LLM().Complete(ctx, llm.CompletionRequest{
+        SystemPrompt: specSystemPrompt,
+        Messages:     []llm.Message{{Role: llm.RoleUser, Content: prompt}},
     })
     if err != nil {
         return state, err
@@ -262,17 +262,16 @@ type Client interface {
 - `ClaudeCLI` - Shells out to `claude` binary (full token/cost tracking)
 - `MockClient` - Testing with configurable responses
 
-**Context management**:
+**Request structure**:
 ```go
 type CompletionRequest struct {
-    Model         string
-    System        string
-    Messages      []Message
-    MaxTokens     int
-    Temperature   float64
-    Tools         []Tool
-    ContextLimit  int           // Auto-prune if exceeded
-    PruneStrategy PruneStrategy // Oldest, SlidingWindow, Summarize
+    SystemPrompt string           // System-level instructions
+    Messages     []Message        // Conversation history
+    Model        string           // Model to use
+    MaxTokens    int              // Max response tokens
+    Temperature  float64          // Response randomness
+    Tools        []Tool           // Available tools
+    Options      map[string]any   // Provider-specific options
 }
 ```
 

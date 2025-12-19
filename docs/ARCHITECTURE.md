@@ -79,7 +79,7 @@ type Edge struct {
 }
 
 // RouterFunc selects next node based on state
-type RouterFunc[S any] func(state S) string
+type RouterFunc[S any] func(ctx Context, state S) string
 
 // CompiledGraph is ready for execution
 type CompiledGraph[S any] struct {
@@ -146,38 +146,32 @@ type Client interface {
 
 // CompletionRequest is the input for LLM calls
 type CompletionRequest struct {
-    Model         string
-    System        string
-    Messages      []Message
-    MaxTokens     int
-    Temperature   float64
-    Tools         []Tool
-    ContextLimit  int
-    PruneStrategy PruneStrategy
+    SystemPrompt string         // System-level instructions
+    Messages     []Message      // Conversation history
+    Model        string         // Model to use
+    MaxTokens    int            // Max response tokens
+    Temperature  float64        // Response randomness
+    Tools        []Tool         // Available tools
+    Options      map[string]any // Provider-specific options
 }
 
 // Message is a conversation turn
 type Message struct {
-    Role    string // "user", "assistant", "system"
+    Role    Role   // RoleUser, RoleAssistant, RoleTool, RoleSystem
     Content string
+    Name    string // For tool results
 }
 
 // CompletionResponse is the LLM output
 type CompletionResponse struct {
-    Content   string
-    TokensIn  int
-    TokensOut int
-    StopReason string
+    Content      string
+    Usage        TokenUsage
+    Model        string
+    FinishReason string
+    Duration     time.Duration
+    SessionID    string  // Claude CLI specific
+    CostUSD      float64 // Claude CLI specific
 }
-
-// PruneStrategy determines how to handle context overflow
-type PruneStrategy int
-
-const (
-    PruneOldest PruneStrategy = iota
-    PruneSlidingWindow
-    PruneSummarize
-)
 ```
 
 ---
@@ -317,7 +311,7 @@ func (cg *CompiledGraph[S]) nextNode(current string, state S) (string, error) {
             return edge.To, nil
         }
         // Conditional edge - evaluate router
-        next := (*edge.Condition)(state)
+        next := (*edge.Condition)(ctx, state)
         return next, nil
     }
 
@@ -426,21 +420,7 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 }
 ```
 
-**Use case**: Single-process persistence, development
-
-### Postgres Store
-
-```go
-type PostgresStore struct {
-    pool *pgxpool.Pool
-}
-
-func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
-    return &PostgresStore{pool: pool}
-}
-```
-
-**Use case**: Production, multi-process
+**Use case**: Single-process persistence, production-ready
 
 ---
 
@@ -475,8 +455,8 @@ func (c *ClaudeCLIClient) Complete(
     defer cancel()
 
     args := []string{"--print", "-p", formatPrompt(req)}
-    if req.System != "" {
-        args = append(args, "--system", req.System)
+    if req.SystemPrompt != "" {
+        args = append(args, "--system-prompt", req.SystemPrompt)
     }
 
     cmd := exec.CommandContext(ctx, c.binaryPath, args...)
