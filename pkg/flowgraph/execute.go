@@ -1,11 +1,15 @@
 package flowgraph
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"runtime/debug"
+	"time"
 
 	"github.com/rmurphy/flowgraph/pkg/flowgraph/checkpoint"
+	"github.com/rmurphy/flowgraph/pkg/flowgraph/observability"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Run executes the graph with the given initial state.
@@ -28,7 +32,7 @@ import (
 //	if err != nil {
 //	    // result contains state at point of failure
 //	}
-func (cg *CompiledGraph[S]) Run(ctx Context, state S, opts ...RunOption) (S, error) {
+func (cg *CompiledGraph[S]) Run(ctx Context, state S, opts ...RunOption) (result S, runErr error) {
 	if ctx == nil {
 		return state, ErrNilContext
 	}
@@ -43,20 +47,78 @@ func (cg *CompiledGraph[S]) Run(ctx Context, state S, opts ...RunOption) (S, err
 		return state, ErrRunIDRequired
 	}
 
-	return cg.runFrom(ctx, state, cg.entryPoint, &cfg)
+	// Get run ID for observability (from config or context)
+	runID := cfg.runID
+	if runID == "" {
+		runID = ctx.RunID()
+	}
+
+	// Start timing
+	startTime := time.Now()
+
+	// Log run start
+	observability.LogRunStart(cfg.logger, runID)
+
+	// Start run span if tracing enabled
+	var execCtx context.Context = ctx
+	var runSpan trace.Span
+	if cfg.tracingEnabled {
+		execCtx, runSpan = cfg.spans.StartRunSpan(ctx, "flowgraph", runID)
+		defer func() {
+			cfg.spans.EndSpanWithError(runSpan, runErr)
+		}()
+	}
+
+	// Execute the graph
+	var nodeCount int
+	result, nodeCount, runErr = cg.runFromWithObservability(execCtx, ctx, state, cg.entryPoint, &cfg)
+
+	// Calculate duration
+	duration := time.Since(startTime)
+	durationMs := float64(duration.Milliseconds())
+
+	// Record graph run metric
+	cfg.metrics.RecordGraphRun(ctx, runErr == nil, duration)
+
+	// Log run completion or error
+	if runErr != nil {
+		// Get last node from error if available
+		lastNode := ""
+		if nodeErr, ok := runErr.(*NodeError); ok {
+			lastNode = nodeErr.NodeID
+		} else if maxErr, ok := runErr.(*MaxIterationsError); ok {
+			lastNode = maxErr.LastNodeID
+		} else if cancelErr, ok := runErr.(*CancellationError); ok {
+			lastNode = cancelErr.NodeID
+		}
+		observability.LogRunError(cfg.logger, runID, runErr, durationMs, lastNode)
+	} else {
+		observability.LogRunComplete(cfg.logger, runID, durationMs, nodeCount)
+	}
+
+	return result, runErr
 }
 
 // runFrom executes the graph starting from a specific node.
-// This is used both by Run() and Resume().
+// This is used by Resume() - does not include run-level observability.
 func (cg *CompiledGraph[S]) runFrom(ctx Context, state S, startNode string, cfg *runConfig) (S, error) {
+	result, _, err := cg.runFromWithObservability(ctx, ctx, state, startNode, cfg)
+	return result, err
+}
+
+// runFromWithObservability executes the graph with full observability.
+// tracingCtx carries span context; fgCtx is the flowgraph Context.
+// Returns the final state, node count, and any error.
+func (cg *CompiledGraph[S]) runFromWithObservability(tracingCtx context.Context, fgCtx Context, state S, startNode string, cfg *runConfig) (S, int, error) {
 	current := startNode
 	iterations := 0
 	prevNode := ""
+	nodeCount := 0
 
 	for current != END {
 		iterations++
 		if iterations > cfg.maxIterations {
-			return state, &MaxIterationsError{
+			return state, nodeCount, &MaxIterationsError{
 				Max:        cfg.maxIterations,
 				LastNodeID: current,
 				State:      state,
@@ -65,33 +127,63 @@ func (cg *CompiledGraph[S]) runFrom(ctx Context, state S, startNode string, cfg 
 
 		// Check for cancellation before executing node
 		select {
-		case <-ctx.Done():
-			return state, &CancellationError{
+		case <-fgCtx.Done():
+			return state, nodeCount, &CancellationError{
 				NodeID:       current,
 				State:        state,
-				Cause:        ctx.Err(),
+				Cause:        fgCtx.Err(),
 				WasExecuting: false,
 			}
 		default:
 		}
 
-		// Execute the node
-		var err error
-		state, err = cg.executeNode(ctx, current, state)
-		if err != nil {
-			return state, err
+		// Log node start
+		observability.LogNodeStart(cfg.logger, current)
+
+		// Start node span if tracing enabled
+		nodeTracingCtx := tracingCtx
+		var nodeSpan trace.Span
+		if cfg.tracingEnabled {
+			nodeTracingCtx, nodeSpan = cfg.spans.StartNodeSpan(tracingCtx, current)
 		}
 
+		// Time the node execution
+		nodeStart := time.Now()
+
+		// Execute the node
+		var nodeErr error
+		state, nodeErr = cg.executeNode(fgCtx, current, state)
+
+		// Calculate duration
+		nodeDuration := time.Since(nodeStart)
+		nodeDurationMs := float64(nodeDuration.Milliseconds())
+
+		// Record node metrics
+		cfg.metrics.RecordNodeExecution(nodeTracingCtx, current, nodeDuration, nodeErr)
+
+		// End node span with error status
+		if cfg.tracingEnabled {
+			cfg.spans.EndSpanWithError(nodeSpan, nodeErr)
+		}
+
+		// Log node completion or error
+		if nodeErr != nil {
+			observability.LogNodeError(cfg.logger, current, nodeErr)
+			return state, nodeCount, nodeErr
+		}
+		observability.LogNodeComplete(cfg.logger, current, nodeDurationMs)
+		nodeCount++
+
 		// Determine next node
-		next, err := cg.nextNode(ctx, state, current)
+		next, err := cg.nextNode(fgCtx, state, current)
 		if err != nil {
-			return state, err
+			return state, nodeCount, err
 		}
 
 		// Checkpoint after successful node execution
 		if cfg.checkpointStore != nil {
-			if err := cg.saveCheckpoint(ctx, cfg, current, prevNode, state, next); err != nil {
-				return state, err
+			if err := cg.saveCheckpointWithObservability(fgCtx, cfg, current, prevNode, state, next); err != nil {
+				return state, nodeCount, err
 			}
 		}
 
@@ -99,11 +191,17 @@ func (cg *CompiledGraph[S]) runFrom(ctx Context, state S, startNode string, cfg 
 		current = next
 	}
 
-	return state, nil
+	return state, nodeCount, nil
 }
 
 // saveCheckpoint persists the current state after node execution.
+// Used by Resume() which doesn't have full observability config.
 func (cg *CompiledGraph[S]) saveCheckpoint(ctx Context, cfg *runConfig, nodeID, prevNodeID string, state S, nextNode string) error {
+	return cg.saveCheckpointWithObservability(ctx, cfg, nodeID, prevNodeID, state, nextNode)
+}
+
+// saveCheckpointWithObservability persists the current state with observability.
+func (cg *CompiledGraph[S]) saveCheckpointWithObservability(ctx Context, cfg *runConfig, nodeID, prevNodeID string, state S, nextNode string) error {
 	// Serialize state
 	stateBytes, err := json.Marshal(state)
 	if err != nil {
@@ -114,8 +212,7 @@ func (cg *CompiledGraph[S]) saveCheckpoint(ctx Context, cfg *runConfig, nodeID, 
 				Err:    err,
 			}
 		}
-		ctx.Logger().Warn("checkpoint serialization failed",
-			"node", nodeID, "error", err)
+		observability.LogCheckpointError(cfg.logger, nodeID, "serialize", err)
 		return nil
 	}
 
@@ -137,8 +234,7 @@ func (cg *CompiledGraph[S]) saveCheckpoint(ctx Context, cfg *runConfig, nodeID, 
 				Err:    err,
 			}
 		}
-		ctx.Logger().Warn("checkpoint marshal failed",
-			"node", nodeID, "error", err)
+		observability.LogCheckpointError(cfg.logger, nodeID, "marshal", err)
 		return nil
 	}
 
@@ -151,9 +247,14 @@ func (cg *CompiledGraph[S]) saveCheckpoint(ctx Context, cfg *runConfig, nodeID, 
 				Err:    err,
 			}
 		}
-		ctx.Logger().Warn("checkpoint save failed",
-			"node", nodeID, "error", err)
+		observability.LogCheckpointError(cfg.logger, nodeID, "save", err)
+		return nil
 	}
+
+	// Log and record successful checkpoint
+	sizeBytes := len(data)
+	observability.LogCheckpoint(cfg.logger, nodeID, sizeBytes)
+	cfg.metrics.RecordCheckpoint(ctx, nodeID, int64(sizeBytes))
 
 	return nil
 }

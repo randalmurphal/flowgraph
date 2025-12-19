@@ -14,8 +14,8 @@
 | Phase 2: Conditional | ✅ Complete | 2025-12-19 | 2025-12-19 | Implemented with Phase 1 |
 | Phase 3: Checkpointing | ✅ Complete | 2025-12-19 | 2025-12-19 | 91.3% coverage |
 | Phase 4: LLM Clients | ✅ Complete | 2025-12-19 | 2025-12-19 | 74.7% coverage (binary-dependent) |
-| Phase 5: Observability | 🟡 Ready | - | - | Can start now |
-| Phase 6: Polish | ⬜ Blocked | - | - | Needs all phases |
+| Phase 5: Observability | ✅ Complete | 2025-12-19 | 2025-12-19 | 90.6% coverage |
+| Phase 6: Polish | 🟡 Ready | - | - | Can start now |
 
 ---
 
@@ -182,31 +182,55 @@ ClaudeCLI.Stream() and the actual binary execution paths have lower coverage bec
 
 ---
 
-## Phase 5: Observability 🟡 READY TO START
+## Phase 5: Observability ✅ COMPLETE
 
+**Completed**: 2025-12-19
+**Coverage**: 90.6% (target: 85%)
 **Dependencies**: Phases 1-4 ✅
-**Spec**: `.spec/phases/PHASE-5-observability.md`
 
-### Files to Create
+### Files Created
 
 ```
 pkg/flowgraph/observability/
-├── logger.go     # slog integration helpers
-├── metrics.go    # OpenTelemetry metrics
-├── tracing.go    # OpenTelemetry tracing
-├── noop.go       # No-op implementations
-└── *_test.go
+├── logger.go       # slog enrichment helpers
+├── metrics.go      # OpenTelemetry metrics with interface
+├── tracing.go      # OpenTelemetry tracing with interface
+├── noop.go         # No-op implementations for disabled state
+├── logger_test.go
+├── metrics_test.go
+├── tracing_test.go
+└── noop_test.go
 ```
 
-### Key Tasks
+### Files Modified
 
-- [ ] Logger enrichment with run_id, node_id, attempt
-- [ ] OpenTelemetry metrics (node executions, latency, errors)
-- [ ] OpenTelemetry tracing (spans for runs and nodes)
-- [ ] No-op implementations for disabled state
-- [ ] WithLogger, WithMetrics, WithTracing options
-- [ ] Execute integration
-- [ ] 85% test coverage
+| File | Changes |
+|------|---------|
+| `options.go` | Added WithObservabilityLogger, WithMetrics, WithTracing RunOptions |
+| `execute.go` | Added observability hooks for logging, metrics, tracing |
+
+### What Works
+
+- ✅ Logger enrichment with run_id, node_id, attempt fields
+- ✅ LogRunStart, LogRunComplete, LogRunError functions
+- ✅ LogNodeStart, LogNodeComplete, LogNodeError functions
+- ✅ LogCheckpoint, LogCheckpointError functions
+- ✅ OpenTelemetry metrics (MetricsRecorder interface)
+  - flowgraph.node.executions
+  - flowgraph.node.latency_ms
+  - flowgraph.node.errors
+  - flowgraph.graph.runs
+  - flowgraph.graph.latency_ms
+  - flowgraph.checkpoint.size_bytes
+- ✅ OpenTelemetry tracing (SpanManager interface)
+  - flowgraph.run parent span
+  - flowgraph.node.{id} child spans
+- ✅ NoopMetrics and NoopSpanManager for disabled state
+- ✅ WithObservabilityLogger RunOption
+- ✅ WithMetrics(bool) RunOption
+- ✅ WithTracing(bool) RunOption
+- ✅ Full execute.go integration with timing, spans, logging
+- ✅ All features opt-in with no overhead when disabled
 
 ---
 
@@ -216,9 +240,10 @@ pkg/flowgraph/observability/
 
 | Package | Lines | Test Lines | Coverage |
 |---------|-------|------------|----------|
-| flowgraph | ~550 | ~1300 | 87.8% |
+| flowgraph | ~650 | ~1500 | 89.1% |
 | flowgraph/checkpoint | ~250 | ~350 | 91.3% |
 | flowgraph/llm | ~280 | ~250 | 74.7% |
+| flowgraph/observability | ~300 | ~500 | 90.6% |
 
 ### Specification Metrics
 
@@ -236,8 +261,9 @@ pkg/flowgraph/observability/
 1. ✅ ~~Phase 1 implementation~~ DONE
 2. ✅ ~~Phase 3 (Checkpointing)~~ DONE
 3. ✅ ~~Phase 4 (LLM Clients)~~ DONE
-4. Start Phase 5 (Observability)
-5. Follow spec in `.spec/phases/PHASE-5-observability.md`
+4. ✅ ~~Phase 5 (Observability)~~ DONE
+5. Start Phase 6 (Polish) - examples, documentation, API review
+6. Follow spec in `.spec/phases/PHASE-6-polish.md`
 
 ---
 
@@ -268,3 +294,15 @@ pkg/flowgraph/observability/
 - Added dependency: modernc.org/sqlite (pure Go SQLite)
 - Achieved 91.3% coverage for checkpoint, 74.7% for llm
 - All tests pass with race detection
+
+### Session 4 (2025-12-19): Phase 5 - Observability
+
+- Implemented observability package with slog, OTel metrics, OTel tracing
+- Created MetricsRecorder and SpanManager interfaces with OTel and Noop implementations
+- Added logger enrichment helpers for structured logging
+- Added WithObservabilityLogger, WithMetrics, WithTracing RunOptions
+- Integrated observability into execute.go with timing, spans, logging
+- Added dependency: go.opentelemetry.io/otel (metrics, trace, SDK)
+- Achieved 90.6% coverage for observability
+- All tests pass with race detection
+- Phase 5 complete, Phase 6 (Polish) ready to start

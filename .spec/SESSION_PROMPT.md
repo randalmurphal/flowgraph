@@ -1,327 +1,279 @@
 # flowgraph Implementation Session
 
-**Purpose**: Implement flowgraph Phase 5 (Observability)
+**Purpose**: Implement flowgraph Phase 6 (Polish & Documentation)
 
-**Philosophy**: Write production-quality Go code. Follow the specs exactly. Test as you go. No shortcuts.
+**Philosophy**: Production-ready documentation and examples. Make the library usable. No shortcuts.
 
 ---
 
 ## Context
 
-flowgraph is a Go library for graph-based LLM workflow orchestration. Phases 1-4 are complete. Your job is to implement observability features: structured logging, metrics, and tracing.
+flowgraph is a Go library for graph-based LLM workflow orchestration. Phases 1-5 are complete. Your job is to add documentation, examples, benchmarks, and final polish.
 
 ### What's Complete
 
-- **Phase 1**: Core graph engine - `pkg/flowgraph/*.go` (87.8% coverage)
+- **Phase 1**: Core graph engine - `pkg/flowgraph/*.go` (89.1% coverage)
 - **Phase 2**: Conditional edges - included in Phase 1
 - **Phase 3**: Checkpointing - `pkg/flowgraph/checkpoint/` (91.3% coverage)
 - **Phase 4**: LLM Clients - `pkg/flowgraph/llm/` (74.7% coverage)
+- **Phase 5**: Observability - `pkg/flowgraph/observability/` (90.6% coverage)
 - **27 ADRs** in `decisions/` - all architectural decisions locked
 - **10 Feature Specs** in `features/` - detailed behavior specifications
-- **6 Phase Specs** in `phases/` - implementation plans with code skeletons
+- **6 Phase Specs** in `phases/` - implementation plans
 
 ### What's Ready to Build
 
-- **Phase 5**: Observability (structured logging, OpenTelemetry metrics/tracing)
+- **Phase 6**: Polish & Documentation (examples, README, benchmarks, godoc)
 
 ---
 
-## Your Task: Implement Phase 5 Observability
+## Your Task: Implement Phase 6 Polish
 
-**Goal**: Add production-grade observability: structured logging via slog, metrics and tracing via OpenTelemetry.
+**Goal**: Make flowgraph production-ready with comprehensive documentation, examples, and benchmarks.
 
 **Estimated Effort**: 2-3 days
 
 ### Files to Create
 
 ```
-pkg/flowgraph/observability/
-├── logger.go       # slog integration helpers
-├── metrics.go      # OpenTelemetry metrics
-├── tracing.go      # OpenTelemetry tracing
-├── noop.go         # No-op implementations
-├── logger_test.go
-├── metrics_test.go
-├── tracing_test.go
-└── noop_test.go
-```
-
-### Files to Modify
-
-```
-pkg/flowgraph/
-├── options.go      # Add WithLogger, WithMetrics, WithTracing
-├── execute.go      # Add observability hooks
+flowgraph/
+├── README.md                    # Project README (replace/update existing)
+├── CONTRIBUTING.md              # Contribution guide
+├── CHANGELOG.md                 # Version history
+├── doc.go                       # Package documentation
+├── examples/
+│   ├── linear/main.go           # Simple linear flow
+│   ├── conditional/main.go      # Branching example
+│   ├── loop/main.go             # Retry/loop example
+│   ├── checkpointing/main.go    # Checkpoint/resume example
+│   ├── llm/main.go              # LLM integration example
+│   └── observability/main.go    # Logging/metrics/tracing example
+└── benchmarks/
+    ├── graph_test.go            # Graph construction benchmarks
+    ├── execute_test.go          # Execution benchmarks
+    └── checkpoint_test.go       # Checkpoint benchmarks
 ```
 
 ---
 
 ## Implementation Order
 
-### Step 1: Logger Helpers (~2 hours)
+### Step 1: Package Documentation (~2 hours)
 
-Create `observability/logger.go` with slog enrichment helpers:
+Create `doc.go` in `pkg/flowgraph/` with comprehensive package docs:
+- Overview of flowgraph
+- Basic usage example
+- Conditional branching example
+- Checkpointing example
+- LLM integration example
+- Error handling patterns
 
-```go
-// EnrichLogger adds flowgraph context to a logger
-func EnrichLogger(logger *slog.Logger, runID, nodeID string, attempt int) *slog.Logger
+See `.spec/phases/PHASE-6-polish.md` for the full doc.go template.
 
-// LogNodeStart/Complete/Error for structured logging
-func LogNodeStart(logger *slog.Logger, nodeID string)
-func LogNodeComplete(logger *slog.Logger, nodeID string, durationMs float64)
-func LogNodeError(logger *slog.Logger, nodeID string, err error)
-func LogCheckpoint(logger *slog.Logger, nodeID string, sizeBytes int)
+### Step 2: README.md (~2 hours)
+
+Update the project README with:
+- Feature list
+- Installation instructions
+- Quick start example
+- Links to examples
+- Links to documentation
+- Performance overview
+- Contributing section
+
+### Step 3: Examples (~4 hours)
+
+Create working, copy-pasteable examples:
+
+1. **linear/** - Basic sequential execution (3 nodes → END)
+2. **conditional/** - Branching based on state (if/else routing)
+3. **loop/** - Retry pattern with max attempts
+4. **checkpointing/** - Save/resume with SQLite
+5. **llm/** - Using MockClient for testing (real Claude requires binary)
+6. **observability/** - Using all three: logging, metrics, tracing
+
+Each example should:
+- Be a complete, runnable main.go
+- Have a README explaining what it demonstrates
+- Include comments explaining the key concepts
+
+### Step 4: Benchmarks (~2 hours)
+
+Create benchmarks to establish performance baselines:
+
+```
+benchmarks/
+├── graph_test.go       # NewGraph, AddNode, Compile
+├── execute_test.go     # Run with various graph sizes/shapes
+└── checkpoint_test.go  # Save/Load performance
 ```
 
-### Step 2: OpenTelemetry Metrics (~3 hours)
+### Step 5: Contributing Guide (~1 hour)
 
-Create `observability/metrics.go`:
+Create CONTRIBUTING.md covering:
+- Development setup
+- Code style (gofmt, golangci-lint)
+- Testing requirements
+- PR process
 
-```go
-// Metrics to emit:
-// - flowgraph.node.executions{node_id="..."}
-// - flowgraph.node.latency_ms{node_id="..."}
-// - flowgraph.node.errors{node_id="..."}
-// - flowgraph.graph.runs{success="true|false"}
-// - flowgraph.checkpoint.size_bytes{node_id="..."}
+### Step 6: Godoc Review (~2 hours)
 
-func RecordNodeExecution(ctx context.Context, nodeID string, duration time.Duration, err error)
-func RecordGraphRun(ctx context.Context, success bool)
-func RecordCheckpoint(ctx context.Context, nodeID string, sizeBytes int64)
-```
-
-### Step 3: OpenTelemetry Tracing (~3 hours)
-
-Create `observability/tracing.go`:
-
-```go
-// Spans created:
-// flowgraph.run (parent span)
-//   ├── flowgraph.node.a
-//   ├── flowgraph.node.b
-//   └── flowgraph.node.c
-
-func StartRunSpan(ctx context.Context, graphName, runID string) (context.Context, trace.Span)
-func StartNodeSpan(ctx context.Context, nodeID string) (context.Context, trace.Span)
-func EndSpanWithError(span trace.Span, err error)
-func AddSpanEvent(ctx context.Context, name string, attrs ...attribute.KeyValue)
-```
-
-### Step 4: No-op Implementations (~30 min)
-
-Create `observability/noop.go` for when observability is disabled:
-
-```go
-type NoopMetrics struct{}
-func (NoopMetrics) RecordNodeExecution(...) {}
-func (NoopMetrics) RecordGraphRun(...) {}
-func (NoopMetrics) RecordCheckpoint(...) {}
-```
-
-### Step 5: Options Integration (~2 hours)
-
-Add to `options.go`:
-
-```go
-func WithLogger(logger *slog.Logger) RunOption
-func WithMetrics(enabled bool) RunOption
-func WithTracing(enabled bool) RunOption
-```
-
-### Step 6: Execute Integration (~2 hours)
-
-Modify `execute.go` to:
-- Start/end run span if tracing enabled
-- Start/end node spans around each node execution
-- Record metrics after each node
-- Log with enriched logger
-
-### Step 7: Tests (~2 hours)
-
-- Logger tests with mock handlers
-- Metrics tests with test meter provider
-- Tracing tests with mock span processor
-- Integration test with full graph execution
-
----
-
-## Key Decisions (Don't Re-Decide)
-
-| Topic | Decision | Notes |
-|-------|----------|-------|
-| Logging library | slog (stdlib) | Go 1.21+, no dependency |
-| Metrics/Tracing | OpenTelemetry | Industry standard |
-| Default state | Disabled | Opt-in via WithLogger/WithMetrics/WithTracing |
-| Overhead | No-op when disabled | No performance impact |
+Review all public APIs have proper documentation:
+- Every exported type
+- Every exported function
+- Every exported constant
+- Include examples where helpful
 
 ---
 
 ## Quality Requirements
 
+### Documentation Quality
+
+- README gets users started in < 5 minutes
+- Examples are copy-pasteable and work
+- Error messages are clear
+- API documentation is complete
+
 ### Code Quality
 
-- All public types have godoc comments
-- All functions handle errors explicitly
-- No `_` for ignored errors
-- Use `fmt.Errorf("operation: %w", err)` for wrapping
+- All examples compile and run
+- No linter warnings (golangci-lint)
+- go vet clean
+- No race conditions
 
-### Testing
+### Benchmarks
 
-- Table-driven tests using testify
-- 85% coverage target
-- Race detection: `go test -race ./...`
-- Test both enabled and disabled paths
-
-### Style
-
-- `gofmt -s -w .` before commit
-- `go vet ./...` clean
-- Follow patterns from existing core code
-
----
-
-## Dependencies to Add
-
-```go
-// go.mod additions
-require (
-    go.opentelemetry.io/otel v1.24.0
-    go.opentelemetry.io/otel/metric v1.24.0
-    go.opentelemetry.io/otel/trace v1.24.0
-)
-```
-
-Note: slog is stdlib (Go 1.21+), no dependency needed.
+- Graph construction benchmarks
+- Execution benchmarks (10, 100, 1000 nodes)
+- Checkpoint benchmarks
 
 ---
 
 ## Acceptance Criteria
 
-### Structured Logging Works
+### Examples Work
 
-```go
-logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-
-result, err := compiled.Run(ctx, state,
-    flowgraph.WithLogger(logger),
-    flowgraph.WithRunID("run-123"))
-
-// Logs include: run_id, node_id, duration_ms, errors
+```bash
+cd examples/linear && go run main.go
+cd examples/conditional && go run main.go
+cd examples/loop && go run main.go
+cd examples/checkpointing && go run main.go
+cd examples/observability && go run main.go
 ```
 
-### Metrics Work (with OTel provider configured)
+### Documentation Complete
 
-```go
-result, err := compiled.Run(ctx, state,
-    flowgraph.WithMetrics(true))
-
-// Metrics emitted:
-// - flowgraph.node.executions{node_id="process"}
-// - flowgraph.node.latency_ms{node_id="process"}
-// - flowgraph.graph.runs{success="true"}
+```bash
+# godoc renders correctly
+go doc -all ./pkg/flowgraph/
 ```
 
-### Tracing Works (with OTel provider configured)
+### Benchmarks Run
 
-```go
-result, err := compiled.Run(ctx, state,
-    flowgraph.WithTracing(true))
-
-// Spans created in hierarchy:
-// flowgraph.run
-//   ├── flowgraph.node.start
-//   ├── flowgraph.node.process
-//   └── flowgraph.node.end
+```bash
+go test -bench=. ./benchmarks/...
 ```
 
-### No Overhead When Disabled
+### Quality Checks Pass
 
-```go
-// Default - no observability overhead
-result, err := compiled.Run(ctx, state)
+```bash
+go test -race ./...
+go vet ./...
+gofmt -s -d . | tee /dev/stderr | (! grep .)
 ```
 
 ---
 
 ## Checklist
 
-- [ ] observability/logger.go with slog helpers
-- [ ] observability/metrics.go with OTel metrics
-- [ ] observability/tracing.go with OTel tracing
-- [ ] observability/noop.go with no-op implementations
-- [ ] WithLogger RunOption
-- [ ] WithMetrics RunOption
-- [ ] WithTracing RunOption
-- [ ] Execute integration (spans, metrics, logging hooks)
-- [ ] All tests passing
-- [ ] 85% coverage achieved
-- [ ] No race conditions
-- [ ] go.mod updated with OTel dependencies
+- [ ] doc.go package documentation
+- [ ] README.md complete
+- [ ] CONTRIBUTING.md
+- [ ] CHANGELOG.md (initial version)
+- [ ] examples/linear/main.go + README
+- [ ] examples/conditional/main.go + README
+- [ ] examples/loop/main.go + README
+- [ ] examples/checkpointing/main.go + README
+- [ ] examples/llm/main.go + README
+- [ ] examples/observability/main.go + README
+- [ ] benchmarks/graph_test.go
+- [ ] benchmarks/execute_test.go
+- [ ] benchmarks/checkpoint_test.go
+- [ ] All godoc reviewed and improved
+- [ ] All examples tested
+- [ ] All quality checks pass
 
 ---
 
 ## Reference Code
 
-### Existing Options Pattern (options.go)
+### Existing Test Patterns
+
+Look at existing tests for patterns:
+- `pkg/flowgraph/execute_test.go` - graph setup patterns
+- `pkg/flowgraph/checkpoint_test.go` - checkpoint patterns
+- `pkg/flowgraph/llm/mock_test.go` - mock LLM patterns
+- `pkg/flowgraph/observability_integration_test.go` - observability patterns
+
+### Key Types
 
 ```go
-func WithCheckpointing(store checkpoint.Store) RunOption {
-    return func(c *runConfig) {
-        c.checkpointStore = store
-    }
-}
-```
+// Core types to demonstrate
+flowgraph.Graph[S any]
+flowgraph.CompiledGraph[S any]
+flowgraph.Context
+flowgraph.NodeFunc[S any]
+flowgraph.RouterFunc[S any]
 
-### Existing Execute Loop (execute.go)
+// Options
+flowgraph.WithMaxIterations(n int)
+flowgraph.WithCheckpointing(store checkpoint.Store)
+flowgraph.WithRunID(id string)
+flowgraph.WithObservabilityLogger(logger *slog.Logger)
+flowgraph.WithMetrics(enabled bool)
+flowgraph.WithTracing(enabled bool)
 
-```go
-func (cg *CompiledGraph[S]) Run(ctx Context, state S, opts ...RunOption) (S, error) {
-    cfg := defaultRunConfig()
-    for _, opt := range opts {
-        opt(&cfg)
-    }
-    // ... execution loop
-}
-```
-
-### Error Wrapping Pattern
-
-```go
-return s, fmt.Errorf("node %s: %w", current, err)
+// Context options
+flowgraph.WithLogger(logger *slog.Logger)
+flowgraph.WithLLM(client llm.Client)
+flowgraph.WithContextRunID(id string)
 ```
 
 ---
 
 ## First Steps
 
-1. **Create directory**: `mkdir -p pkg/flowgraph/observability`
+1. **Read the spec**: `.spec/phases/PHASE-6-polish.md` has full templates
 
-2. **Start with logger.go** - simplest, no dependencies
+2. **Start with doc.go** - establishes the narrative for all other docs
 
-3. **Add OTel dependencies** when ready for metrics/tracing:
+3. **Create examples directory structure**:
    ```bash
-   go get go.opentelemetry.io/otel@v1.24.0
-   go get go.opentelemetry.io/otel/metric@v1.24.0
-   go get go.opentelemetry.io/otel/trace@v1.24.0
+   mkdir -p examples/{linear,conditional,loop,checkpointing,llm,observability}
+   mkdir -p benchmarks
    ```
 
-4. **Write tests as you implement** - don't defer testing
+4. **Build examples incrementally** - each should compile and run before moving on
 
-5. **Run frequently**:
+5. **Test frequently**:
    ```bash
+   go build ./examples/...
    go test -race ./...
-   go vet ./...
    ```
 
 ---
 
 ## After This Phase
 
-When Phase 5 is complete:
+When Phase 6 is complete:
 
 1. Update `.spec/tracking/PROGRESS.md` to mark phase complete
-2. Phase 6 (Polish) can start - examples, documentation, API review
-3. See `.spec/phases/PHASE-6-polish.md` for final phase spec
+2. The library is ready for v1.0 release
+3. Consider:
+   - Creating a GitHub release
+   - Publishing to pkg.go.dev
+   - Writing a blog post or announcement
 
 ---
 
@@ -329,8 +281,18 @@ When Phase 5 is complete:
 
 | Document | Use For |
 |----------|---------|
-| `.spec/phases/PHASE-5-observability.md` | Complete code skeletons |
+| `.spec/phases/PHASE-6-polish.md` | Complete templates and checklists |
 | `.spec/tracking/PROGRESS.md` | Progress tracking |
+| `CLAUDE.md` | Project overview and current state |
 | `pkg/flowgraph/*.go` | Reference implementation patterns |
-| `pkg/flowgraph/checkpoint/` | Reference for subpackage structure |
-| `pkg/flowgraph/llm/` | Reference for subpackage structure |
+| `.spec/knowledge/API_SURFACE.md` | Complete public API |
+
+---
+
+## Notes
+
+- Examples should demonstrate real-world patterns
+- README should be welcoming to newcomers
+- Benchmarks establish baseline for future optimization
+- godoc is the primary API documentation
+- All examples must work without external dependencies (except for llm/ which needs claude binary)

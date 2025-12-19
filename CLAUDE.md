@@ -4,18 +4,18 @@
 
 ---
 
-## Current Status: Phases 1-4 Complete, Phase 5 Ready
+## Current Status: Phases 1-5 Complete, Phase 6 Ready
 
-**Core graph engine, checkpointing, and LLM clients are implemented and tested.** Ready to add observability.
+**Core graph engine, checkpointing, LLM clients, and observability are implemented and tested.** Ready for polish phase.
 
 | Phase | Status | Spec |
 |-------|--------|------|
-| Phase 1: Core Graph | ✅ Complete (87.8% coverage) | `.spec/phases/PHASE-1-core.md` |
+| Phase 1: Core Graph | ✅ Complete (89.1% coverage) | `.spec/phases/PHASE-1-core.md` |
 | Phase 2: Conditional | ✅ Complete (included in P1) | `.spec/phases/PHASE-2-conditional.md` |
 | Phase 3: Checkpointing | ✅ Complete (91.3% coverage) | `.spec/phases/PHASE-3-checkpointing.md` |
 | Phase 4: LLM Clients | ✅ Complete (74.7% coverage) | `.spec/phases/PHASE-4-llm.md` |
-| Phase 5: Observability | **Ready to Start** | `.spec/phases/PHASE-5-observability.md` |
-| Phase 6: Polish | Blocked (needs P5) | `.spec/phases/PHASE-6-polish.md` |
+| Phase 5: Observability | ✅ Complete (90.6% coverage) | `.spec/phases/PHASE-5-observability.md` |
+| Phase 6: Polish | **Ready to Start** | `.spec/phases/PHASE-6-polish.md` |
 
 **Start here**: `.spec/SESSION_PROMPT.md` for implementation handoff.
 
@@ -56,6 +56,15 @@
 | `mock.go` | MockClient for testing | ✅ |
 | `claude_cli.go` | ClaudeCLI implementation | ✅ |
 
+### Observability Package (`pkg/flowgraph/observability/`)
+
+| File | Purpose | Status |
+|------|---------|--------|
+| `logger.go` | slog enrichment helpers | ✅ |
+| `metrics.go` | OpenTelemetry metrics (MetricsRecorder) | ✅ |
+| `tracing.go` | OpenTelemetry tracing (SpanManager) | ✅ |
+| `noop.go` | No-op implementations | ✅ |
+
 ### Working Features
 
 - ✅ Fluent graph builder API
@@ -71,6 +80,10 @@
 - ✅ LLM client interface with streaming
 - ✅ Claude CLI integration
 - ✅ MockClient for testing
+- ✅ Structured logging via slog
+- ✅ OpenTelemetry metrics (node executions, latency, errors)
+- ✅ OpenTelemetry tracing (spans for runs and nodes)
+- ✅ No-op implementations for disabled observability
 
 ### Usage Examples
 
@@ -113,29 +126,33 @@ func myNode(ctx flowgraph.Context, s State) (State, error) {
 }
 ```
 
+```go
+// With observability
+logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+result, err := compiled.Run(ctx, state,
+    flowgraph.WithObservabilityLogger(logger),
+    flowgraph.WithMetrics(true),
+    flowgraph.WithTracing(true),
+    flowgraph.WithRunID("run-123"))
+
+// Logs: run/node start/complete/error with run_id, node_id, duration_ms
+// Metrics: flowgraph.node.executions, flowgraph.node.latency_ms, etc.
+// Spans: flowgraph.run > flowgraph.node.{id}
+```
+
 ---
 
 ## What's Next
 
-### Phase 5: Observability
+### Phase 6: Polish
 
-Add production-grade observability: structured logging, metrics, and tracing.
+Final phase - examples, documentation, and API review.
 
-**Files to create**:
-```
-pkg/flowgraph/observability/
-├── logger.go     # slog integration helpers
-├── metrics.go    # OpenTelemetry metrics
-├── tracing.go    # OpenTelemetry tracing
-├── noop.go       # No-op implementations
-└── *_test.go
-```
-
-**Key features**:
-- Structured logging via slog
-- OpenTelemetry metrics (node executions, latency, errors)
-- OpenTelemetry tracing (spans for runs and nodes)
-- No-op implementations for disabled state
+**Key tasks**:
+- Example applications demonstrating all features
+- User documentation (getting started, API reference)
+- API surface review and cleanup
+- Performance benchmarks
 
 ---
 
@@ -150,7 +167,7 @@ flowgraph/
 │   ├── *_test.go          # Core tests
 │   ├── checkpoint/        # ✅ Checkpoint package
 │   ├── llm/               # ✅ LLM client package
-│   └── observability/     # TODO: Phase 5
+│   └── observability/     # ✅ Observability package
 ├── docs/                  # User documentation
 │   ├── OVERVIEW.md
 │   ├── ARCHITECTURE.md
@@ -198,9 +215,10 @@ go tool cover -func=coverage.out
 ```
 
 **Current Coverage**:
-- flowgraph: 87.8%
+- flowgraph: 89.1%
 - checkpoint: 91.3%
 - llm: 74.7%
+- observability: 90.6%
 
 ---
 

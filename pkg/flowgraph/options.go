@@ -1,6 +1,11 @@
 package flowgraph
 
-import "github.com/rmurphy/flowgraph/pkg/flowgraph/checkpoint"
+import (
+	"log/slog"
+
+	"github.com/rmurphy/flowgraph/pkg/flowgraph/checkpoint"
+	"github.com/rmurphy/flowgraph/pkg/flowgraph/observability"
+)
 
 // runConfig holds configuration for graph execution.
 type runConfig struct {
@@ -16,6 +21,13 @@ type runConfig struct {
 	stateOverride func(any) any
 	validateState func(any) error
 	replayNode    bool
+
+	// Observability
+	logger         *slog.Logger
+	metricsEnabled bool
+	tracingEnabled bool
+	metrics        observability.MetricsRecorder
+	spans          observability.SpanManager
 }
 
 // defaultRunConfig returns the default execution configuration.
@@ -24,6 +36,9 @@ func defaultRunConfig() runConfig {
 		maxIterations:          1000,
 		checkpointFailureFatal: false,
 		sequence:               0,
+		// Observability disabled by default (no overhead)
+		metrics: observability.NoopMetrics{},
+		spans:   observability.NoopSpanManager{},
 	}
 }
 
@@ -90,6 +105,85 @@ func WithRunID(id string) RunOption {
 func WithCheckpointFailureFatal(fatal bool) RunOption {
 	return func(c *runConfig) {
 		c.checkpointFailureFatal = fatal
+	}
+}
+
+// WithObservabilityLogger sets a logger for execution observability.
+// When set, flowgraph logs node executions, completions, errors, and checkpoints.
+//
+// This is separate from the context logger - the context logger is for
+// your node code to use. This logger is for flowgraph's internal logging.
+//
+// Example:
+//
+//	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+//	result, err := compiled.Run(ctx, state,
+//	    flowgraph.WithObservabilityLogger(logger),
+//	    flowgraph.WithRunID("run-123"))
+func WithObservabilityLogger(logger *slog.Logger) RunOption {
+	return func(c *runConfig) {
+		c.logger = logger
+	}
+}
+
+// WithMetrics enables OpenTelemetry metrics collection.
+// When enabled, flowgraph records metrics for node executions, latency,
+// errors, and checkpoint sizes.
+//
+// Requires a global OTel meter provider to be configured:
+//
+//	import "go.opentelemetry.io/otel"
+//	otel.SetMeterProvider(yourProvider)
+//
+// Example:
+//
+//	result, err := compiled.Run(ctx, state,
+//	    flowgraph.WithMetrics(true))
+//
+// Metrics emitted:
+//   - flowgraph.node.executions{node_id="..."}
+//   - flowgraph.node.latency_ms{node_id="..."}
+//   - flowgraph.node.errors{node_id="..."}
+//   - flowgraph.graph.runs{success="true|false"}
+//   - flowgraph.checkpoint.size_bytes{node_id="..."}
+func WithMetrics(enabled bool) RunOption {
+	return func(c *runConfig) {
+		c.metricsEnabled = enabled
+		if enabled {
+			c.metrics = observability.NewMetricsRecorder()
+		} else {
+			c.metrics = observability.NoopMetrics{}
+		}
+	}
+}
+
+// WithTracing enables OpenTelemetry distributed tracing.
+// When enabled, flowgraph creates spans for graph runs and node executions.
+//
+// Requires a global OTel tracer provider to be configured:
+//
+//	import "go.opentelemetry.io/otel"
+//	otel.SetTracerProvider(yourProvider)
+//
+// Example:
+//
+//	result, err := compiled.Run(ctx, state,
+//	    flowgraph.WithTracing(true))
+//
+// Spans created:
+//
+//	flowgraph.run (parent span)
+//	  ├── flowgraph.node.a
+//	  ├── flowgraph.node.b
+//	  └── flowgraph.node.c
+func WithTracing(enabled bool) RunOption {
+	return func(c *runConfig) {
+		c.tracingEnabled = enabled
+		if enabled {
+			c.spans = observability.NewSpanManager()
+		} else {
+			c.spans = observability.NoopSpanManager{}
+		}
 	}
 }
 
