@@ -1,0 +1,237 @@
+{
+  "status": "COMPLETE",
+  "summary": {
+    "docs_reviewed": 13,
+    "critical_issues": 8,
+    "important_issues": 8,
+    "minor_issues": 3
+  },
+  "critical": [
+    {
+      "file": "README.md",
+      "line": 115,
+      "issue": "Checkpointing example ignores error return: `store := checkpoint.NewSQLiteStore(\"./checkpoints.db\")` but actual signature is `NewSQLiteStore(path string) (*SQLiteStore, error)`",
+      "actual_location": "pkg/flowgraph/checkpoint/sqlite.go:26",
+      "fix": "Change to: `store, err := checkpoint.NewSQLiteStore(\"./checkpoints.db\")\nif err != nil {\n    log.Fatal(err)\n}\ndefer store.Close()`",
+      "severity": "CRITICAL"
+    },
+    {
+      "file": "docs/ARCHITECTURE.md",
+      "line": 58,
+      "issue": "Documents non-existent `Node[S]` wrapper type with `ID` and `Func` fields. Implementation uses `NodeFunc[S]` directly in `map[string]NodeFunc[S]` - no wrapper struct exists",
+      "actual_location": "pkg/flowgraph/graph.go:29",
+      "fix": "Remove Node[S] type definition entirely. Show actual: `type Graph[S any] struct { nodes map[string]NodeFunc[S] ... }`",
+      "severity": "CRITICAL"
+    },
+    {
+      "file": "docs/ARCHITECTURE.md",
+      "line": 75,
+      "issue": "Documents non-existent `Edge` type with `From`, `To`, `Condition` fields. Implementation uses separate maps: `edges map[string][]string` and `conditionalEdges map[string]RouterFunc[S]`",
+      "actual_location": "pkg/flowgraph/graph.go:30-31",
+      "fix": "Remove Edge type definition. Update to show actual: unconditional edges in `map[string][]string`, conditional in `map[string]RouterFunc[S]`. No unified Edge struct exists.",
+      "severity": "CRITICAL"
+    },
+    {
+      "file": "docs/ARCHITECTURE.md",
+      "line": 85,
+      "issue": "CompiledGraph struct shows wrong field types: `nodes map[string]Node[S]` and `edges map[string][]Edge` - both types don't exist",
+      "actual_location": "pkg/flowgraph/compiled.go:11-21",
+      "fix": "Update to actual fields: `nodes map[string]NodeFunc[S]`, `edges map[string][]string`, `conditionalEdges map[string]RouterFunc[S]`, `successors map[string][]string`, `predecessors map[string][]string`, `isConditional map[string]bool`",
+      "severity": "CRITICAL"
+    },
+    {
+      "file": "docs/ARCHITECTURE.md",
+      "line": 195,
+      "issue": "Compilation algorithm shows iterating over non-existent Edge struct with edge.From/edge.To fields. Actual implementation iterates `for from, targets := range g.edges`",
+      "actual_location": "pkg/flowgraph/compile.go:36-50",
+      "fix": "Rewrite algorithm section to match actual implementation using map iteration, not Edge struct iteration",
+      "severity": "CRITICAL"
+    },
+    {
+      "file": "README.md",
+      "line": 3,
+      "issue": "Badge URLs reference 'github.com/rmurphy/flowgraph' but this is not a public repository URL. These badges will not work until the repository is published.",
+      "actual_location": "N/A - external service configuration needed",
+      "fix": "Either remove badge placeholders or update to correct repository URL when published. Change 'rmurphy' to actual GitHub username.",
+      "severity": "CRITICAL"
+    },
+    {
+      "file": "README.md",
+      "line": 226,
+      "issue": "LICENSE link references LICENSE file that does not exist in repository.",
+      "actual_location": "No LICENSE file found",
+      "fix": "Add LICENSE file (MIT as mentioned in README) or remove the link until LICENSE is added.",
+      "severity": "CRITICAL"
+    },
+    {
+      "file": "docs/OVERVIEW.md",
+      "line": 190,
+      "issue": "Example ignores error: `store, _ := checkpoint.NewSQLiteStore(\"./checkpoints.db\")` - should handle error or explain why ignored",
+      "actual_location": "pkg/flowgraph/checkpoint/sqlite.go:26",
+      "fix": "Change to proper error handling or add comment explaining why ignored in example context",
+      "severity": "CRITICAL"
+    }
+  ],
+  "important": [
+    {
+      "file": "CLAUDE.md",
+      "line": 108,
+      "issue": "Outdated coverage numbers: Claims 'flowgraph: 89.1%, checkpoint: 91.3%, llm: 74.7%' but actual is 'flowgraph: 95.4%, checkpoint: 91.7%, llm: 93.2%, observability: 90.6%'",
+      "actual_location": "go test output shows 95.4%, 91.7%, 93.2%, 90.6%",
+      "fix": "Update line to: **Coverage**: flowgraph: 95.4%, checkpoint: 91.7%, llm: 93.2%, observability: 90.6%",
+      "severity": "IMPORTANT"
+    },
+    {
+      "file": "docs/ARCHITECTURE.md",
+      "line": 82,
+      "issue": "RouterFunc signature shown without Context parameter: `RouterFunc[S any] func(state S) string` but actual is `func(ctx Context, state S) string`",
+      "actual_location": "pkg/flowgraph/node.go:36",
+      "fix": "Change to: `RouterFunc[S any] func(ctx Context, state S) string`",
+      "severity": "IMPORTANT"
+    },
+    {
+      "file": "docs/ARCHITECTURE.md",
+      "line": 314,
+      "issue": "nextNode() implementation shows calling router as `(*edge.Condition)(ctx, state)` but Edge type doesn't exist. Actual uses conditionalEdges map",
+      "actual_location": "pkg/flowgraph/execute.go",
+      "fix": "Update to show actual implementation accessing conditionalEdges map",
+      "severity": "IMPORTANT"
+    },
+    {
+      "file": "docs/ARCHITECTURE.md",
+      "line": 614,
+      "issue": "Documents future Metrics interface but observability package already exists with MetricsRecorder implementation",
+      "actual_location": "pkg/flowgraph/observability/metrics.go",
+      "fix": "Update to reference actual MetricsRecorder implementation, remove '(Future)' marker",
+      "severity": "IMPORTANT"
+    },
+    {
+      "file": "docs/ARCHITECTURE.md",
+      "line": 627,
+      "issue": "Documents future OpenTelemetry tracing but SpanManager already implemented in observability package",
+      "actual_location": "pkg/flowgraph/observability/tracing.go",
+      "fix": "Update to reference actual SpanManager implementation, remove '(Future)' marker",
+      "severity": "IMPORTANT"
+    },
+    {
+      "file": "README.md",
+      "line": 15,
+      "issue": "Coverage claim '90%+ test coverage' is accurate but could be more precise - actual is 93.7% overall",
+      "actual_location": "Test output shows 95.4%, 91.7%, 93.2%, 90.6% = 93.7% total",
+      "fix": "Optional: Update to '93%+ test coverage' for more precision",
+      "severity": "IMPORTANT"
+    },
+    {
+      "file": "CHANGELOG.md",
+      "line": 5,
+      "issue": "Marked as '[Unreleased]' but Phase 6 completion indicates this should be tagged as a release version.",
+      "actual_location": "CLAUDE.md indicates all phases complete",
+      "fix": "Either tag a v0.1.0 release or add explanation for why still unreleased despite completion",
+      "severity": "IMPORTANT"
+    },
+    {
+      "file": "CLAUDE.md",
+      "line": null,
+      "issue": "Line count 128 lines is within target for project-level CLAUDE.md (target: 150-180) but no duplication check performed against parent",
+      "actual_location": "~/.claude/CLAUDE.md exists",
+      "fix": "Verify no duplication of core principles, error handling philosophy, or testing patterns from global CLAUDE.md",
+      "severity": "IMPORTANT"
+    }
+  ],
+  "minor": [
+    {
+      "file": "README.md",
+      "line": 23,
+      "issue": "States 'Requires Go 1.22 or later' but go.mod shows 'go 1.24.0' - minor version mismatch",
+      "actual_location": "go.mod:3",
+      "fix": "Optional: Update to 'Requires Go 1.24 or later' to match go.mod exactly",
+      "severity": "MINOR"
+    },
+    {
+      "file": "docs/IMPLEMENTATION_GUIDE.md",
+      "line": 3,
+      "issue": "References 'Python (ai-devtools/ensemble)' as source but provides no context about where this is or whether it's relevant to users.",
+      "actual_location": "N/A",
+      "fix": "Either add link/context to Python implementation or remove reference as it's not relevant to Go users",
+      "severity": "MINOR"
+    },
+    {
+      "file": "All documentation",
+      "line": null,
+      "issue": "No file:line references in documentation - AI documentation standards recommend adding them for implementation details",
+      "actual_location": "AI documentation skill - reference.md",
+      "fix": "Optional: Add file:line references like 'graph.go:27' when referencing implementation details for better AI navigation",
+      "severity": "MINOR"
+    }
+  ],
+  "stats": {
+    "functions_validated": 12,
+    "file_refs_checked": 0,
+    "code_examples_validated": 8,
+    "business_rules_validated": 0,
+    "type_definitions_validated": 7,
+    "struct_definitions_validated": 5,
+    "examples_compiled": 6
+  },
+  "validation_details": {
+    "examples_compiled_successfully": [
+      "examples/linear",
+      "examples/conditional",
+      "examples/loop",
+      "examples/llm",
+      "examples/checkpointing",
+      "examples/observability"
+    ],
+    "readme_quickstart_tested": true,
+    "readme_checkpointing_tested": true,
+    "actual_coverage": {
+      "flowgraph": "95.4%",
+      "checkpoint": "91.7%",
+      "llm": "93.2%",
+      "observability": "90.6%",
+      "total": "93.7%"
+    },
+    "documented_coverage": {
+      "CLAUDE.md": "89.1%, 91.3%, 74.7%, 90.6%",
+      "README.md": "90%+",
+      "PROGRESS.md": "98.2% (phase 1), 91.3%, 74.7%, 90.6%"
+    },
+    "phantom_types_found": [
+      "Node[S] struct with ID and Func fields",
+      "Edge struct with From, To, Condition fields"
+    ],
+    "missing_files": [
+      "LICENSE"
+    ]
+  },
+  "docs_validated": [
+    "README.md",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "docs/OVERVIEW.md",
+    "docs/ARCHITECTURE.md",
+    "docs/IMPLEMENTATION_GUIDE.md",
+    "docs/TESTING_STRATEGY.md",
+    "docs/GO_PATTERNS.md",
+    "examples/README.md",
+    "examples/linear/README.md",
+    "examples/llm/README.md",
+    "examples/checkpointing/README.md"
+  ],
+  "validation_notes": [
+    "CRITICAL: docs/ARCHITECTURE.md documents two non-existent types (Node[S] and Edge) throughout",
+    "CRITICAL: README.md checkpointing example will not compile due to ignored error",
+    "All working examples compile and run successfully - examples are accurate",
+    "README Quick Start example tested and works correctly (outputs 2 as expected)",
+    "Test coverage is HIGHER than documented (95.4% vs 89.1% claimed in CLAUDE.md)",
+    "Import paths are consistent but repository URL needs updating before publication",
+    "No LICENSE file exists but MIT is claimed in README - must add before v0.1.0 release",
+    "Most critical issues are phantom type definitions in ARCHITECTURE.md that describe non-existent abstractions",
+    "Actual implementation uses simpler map-based approach instead of Node/Edge wrapper structs",
+    "RouterFunc signature changed from initial design (added Context param) but ARCHITECTURE.md not updated",
+    "Observability features marked as '(Future)' are actually implemented - documentation outdated",
+    "CLAUDE.md follows hierarchical inheritance principles (128 lines, no obvious duplication from global)",
+    "No file:line references used anywhere - opportunity to improve AI navigability"
+  ]
+}

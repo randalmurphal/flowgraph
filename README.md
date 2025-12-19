@@ -112,7 +112,10 @@ Enable crash recovery with SQLite or in-memory storage:
 ```go
 import "github.com/rmurphy/flowgraph/pkg/flowgraph/checkpoint"
 
-store := checkpoint.NewSQLiteStore("./checkpoints.db")
+store, err := checkpoint.NewSQLiteStore("./checkpoints.db")
+if err != nil {
+    log.Fatal(err)
+}
 defer store.Close()
 
 result, err := compiled.Run(ctx, state,

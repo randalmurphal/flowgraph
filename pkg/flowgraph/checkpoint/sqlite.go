@@ -3,6 +3,7 @@ package checkpoint
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -30,9 +31,14 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			f, createErr := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 			if createErr == nil {
-				f.Close()
+				if closeErr := f.Close(); closeErr != nil {
+					// Log but continue - file exists, sql.Open will handle any real issues
+					slog.Warn("failed to close checkpoint file after creation",
+						slog.String("path", path),
+						slog.String("error", closeErr.Error()))
+				}
 			}
-			// Ignore error - file might have been created between Stat and OpenFile
+			// Ignore createErr - file might have been created between Stat and OpenFile (TOCTOU)
 		}
 	}
 
@@ -73,7 +79,12 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 	// Ensure permissions are correct for existing files
 	if path != ":memory:" {
 		if err := os.Chmod(path, 0600); err != nil {
-			// Non-fatal: file might be read-only or on a filesystem that doesn't support chmod
+			// SECURITY WARNING: chmod failure means checkpoint file may be readable by others.
+			// This can happen on network filesystems, read-only mounts, or permission issues.
+			slog.Warn("failed to set restrictive permissions on checkpoint file",
+				slog.String("path", path),
+				slog.String("error", err.Error()),
+				slog.String("security_note", "checkpoint data may be readable by other users"))
 		}
 	}
 
@@ -162,7 +173,17 @@ func (s *SQLiteStore) List(runID string) ([]Info, error) {
 			return nil, fmt.Errorf("scan checkpoint info: %w", err)
 		}
 		info.RunID = runID
-		info.Timestamp, _ = time.Parse(time.RFC3339Nano, timestamp)
+		var parseErr error
+		info.Timestamp, parseErr = time.Parse(time.RFC3339Nano, timestamp)
+		if parseErr != nil {
+			// Log but continue - timestamp is metadata, not critical for resume
+			slog.Warn("failed to parse checkpoint timestamp",
+				slog.String("run_id", runID),
+				slog.String("node_id", info.NodeID),
+				slog.String("raw_timestamp", timestamp),
+				slog.String("error", parseErr.Error()))
+			// info.Timestamp will be zero time
+		}
 		infos = append(infos, info)
 	}
 

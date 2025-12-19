@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"time"
@@ -290,9 +291,18 @@ func (c *ClaudeCLI) Stream(ctx context.Context, req CompletionRequest) (<-chan S
 	ch := make(chan StreamChunk)
 	go func() {
 		defer close(ch)
+		var cmdErr error
 		defer func() {
-			// Wait for command to finish
-			_ = cmd.Wait()
+			// Wait for command to finish and capture error
+			cmdErr = cmd.Wait()
+			if cmdErr != nil {
+				// Try to send error to channel if command failed
+				select {
+				case ch <- StreamChunk{Error: NewError("stream", fmt.Errorf("command failed: %w", cmdErr), false)}:
+				default:
+					// Channel closed or full - error already sent
+				}
+			}
 		}()
 
 		scanner := bufio.NewScanner(stdout)
@@ -547,6 +557,19 @@ func (c *ClaudeCLI) parseResponse(data []byte) *CompletionResponse {
 	var cliResp CLIResponse
 	if err := json.Unmarshal(data, &cliResp); err == nil && cliResp.Type != "" {
 		return c.parseJSONResponse(&cliResp)
+	}
+
+	// JSON parsing failed - log warning if JSON format was expected
+	if c.outputFormat == OutputFormatJSON {
+		// Truncate output for logging
+		preview := content
+		if len(preview) > 200 {
+			preview = preview[:200] + "..."
+		}
+		slog.Warn("claude CLI returned non-JSON response when JSON format was expected",
+			slog.String("output_format", string(c.outputFormat)),
+			slog.String("output_preview", preview),
+			slog.String("impact", "token tracking unavailable"))
 	}
 
 	// Fall back to raw text response

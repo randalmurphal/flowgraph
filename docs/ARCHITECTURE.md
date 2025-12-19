@@ -54,39 +54,31 @@
 ### Graph Types
 
 ```go
-// Graph is the builder for defining workflows
+// Graph is the mutable builder for defining workflows
 type Graph[S any] struct {
-    nodes     map[string]Node[S]
-    edges     []Edge
-    entryNode string
-    validated bool
-}
-
-// Node wraps a NodeFunc with metadata
-type Node[S any] struct {
-    ID   string
-    Func NodeFunc[S]
+    nodes            map[string]NodeFunc[S]     // node ID -> function
+    edges            map[string][]string        // from -> []to (unconditional)
+    conditionalEdges map[string]RouterFunc[S]   // from -> router (conditional)
+    entryPoint       string
 }
 
 // NodeFunc is the signature for node implementations
 type NodeFunc[S any] func(ctx Context, state S) (S, error)
 
-// Edge connects two nodes
-type Edge struct {
-    From      string
-    To        string
-    Condition *RouterFunc // nil for unconditional
-}
-
 // RouterFunc selects next node based on state
 type RouterFunc[S any] func(ctx Context, state S) string
 
-// CompiledGraph is ready for execution
+// CompiledGraph is immutable, ready for execution
 type CompiledGraph[S any] struct {
-    nodes      map[string]Node[S]
-    edges      map[string][]Edge  // from -> edges
-    entryNode  string
-    reachable  map[string]bool    // for validation warnings
+    nodes            map[string]NodeFunc[S]
+    edges            map[string][]string
+    conditionalEdges map[string]RouterFunc[S]
+    entryPoint       string
+
+    // Pre-computed for efficient lookup
+    successors    map[string][]string
+    predecessors  map[string][]string
+    isConditional map[string]bool
 }
 ```
 

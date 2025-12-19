@@ -34,7 +34,7 @@ type runConfig struct {
 func defaultRunConfig() runConfig {
 	return runConfig{
 		maxIterations:          DefaultMaxIterations,
-		checkpointFailureFatal: false,
+		checkpointFailureFatal: true, // Fail loud if checkpointing configured but broken
 		sequence:               0,
 		// Observability disabled by default (no overhead)
 		metrics: observability.NoopMetrics{},
@@ -107,15 +107,21 @@ func WithRunID(id string) RunOption {
 	}
 }
 
-// WithCheckpointFailureFatal makes checkpoint failures stop execution.
-// By default, checkpoint failures are logged but don't stop execution.
+// WithCheckpointFailureFatal controls whether checkpoint failures stop execution.
 //
-// Example:
+// Default: true (checkpoint failures stop execution with CheckpointError).
+//
+// If you configured checkpointing via WithCheckpointing, checkpoint failures
+// indicate a problem that would prevent crash recovery. By default, this stops
+// execution so you're aware the checkpoints aren't working.
+//
+// Set to false only if checkpoints are best-effort supplementary data and you
+// accept that crash recovery may not work:
 //
 //	result, err := compiled.Run(ctx, state,
 //	    flowgraph.WithCheckpointing(store),
 //	    flowgraph.WithRunID("run-123"),
-//	    flowgraph.WithCheckpointFailureFatal(true))
+//	    flowgraph.WithCheckpointFailureFatal(false)) // Continue despite failures
 func WithCheckpointFailureFatal(fatal bool) RunOption {
 	return func(c *runConfig) {
 		c.checkpointFailureFatal = fatal
