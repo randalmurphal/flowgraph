@@ -4,107 +4,101 @@
 
 ---
 
-## Current Status: Phases 1-5 Complete, Phase 6 Ready
+## Status: v0.1.0 Release Ready
 
-**Core graph engine, checkpointing, LLM clients, and observability are implemented and tested.** Ready for polish phase.
+All phases complete. Release branch `release/v0.1.0` created.
 
-| Phase | Status | Spec |
-|-------|--------|------|
-| Phase 1: Core Graph | ✅ Complete (89.1% coverage) | `.spec/phases/PHASE-1-core.md` |
-| Phase 2: Conditional | ✅ Complete (included in P1) | `.spec/phases/PHASE-2-conditional.md` |
-| Phase 3: Checkpointing | ✅ Complete (91.3% coverage) | `.spec/phases/PHASE-3-checkpointing.md` |
-| Phase 4: LLM Clients | ✅ Complete (74.7% coverage) | `.spec/phases/PHASE-4-llm.md` |
-| Phase 5: Observability | ✅ Complete (90.6% coverage) | `.spec/phases/PHASE-5-observability.md` |
-| Phase 6: Polish | **Ready to Start** | `.spec/phases/PHASE-6-polish.md` |
-
-**Start here**: `.spec/SESSION_PROMPT.md` for implementation handoff.
+| Phase | Status | Coverage |
+|-------|--------|----------|
+| Phase 1: Core Graph | Complete | 89.1% |
+| Phase 2: Conditional | Complete | (in P1) |
+| Phase 3: Checkpointing | Complete | 91.3% |
+| Phase 4: LLM Clients | Complete | 83.8% |
+| Phase 5: Observability | Complete | 90.6% |
+| Phase 6: Polish | Complete | 88.2% overall |
 
 ---
 
-## What's Implemented
-
-### Core Package (`pkg/flowgraph/`)
-
-| File | Purpose | Status |
-|------|---------|--------|
-| `errors.go` | All error types (NodeError, PanicError, etc.) | ✅ |
-| `node.go` | NodeFunc[S], RouterFunc[S], END constant | ✅ |
-| `context.go` | Context interface and implementation | ✅ |
-| `graph.go` | Graph[S] builder (AddNode, AddEdge, etc.) | ✅ |
-| `compile.go` | Compile() with validation | ✅ |
-| `compiled.go` | CompiledGraph[S] immutable type | ✅ |
-| `execute.go` | Run() execution loop with checkpointing | ✅ |
-| `options.go` | RunOptions (WithCheckpointing, WithRunID, etc.) | ✅ |
-| `resume.go` | Resume() and ResumeFrom() methods | ✅ |
-
-### Checkpoint Package (`pkg/flowgraph/checkpoint/`)
-
-| File | Purpose | Status |
-|------|---------|--------|
-| `store.go` | CheckpointStore interface | ✅ |
-| `checkpoint.go` | Checkpoint type, JSON serialization | ✅ |
-| `memory.go` | MemoryStore (in-memory, for testing) | ✅ |
-| `sqlite.go` | SQLiteStore (persistent, for production) | ✅ |
-
-### LLM Package (`pkg/flowgraph/llm/`)
-
-| File | Purpose | Status |
-|------|---------|--------|
-| `client.go` | Client interface (Complete, Stream) | ✅ |
-| `request.go` | CompletionRequest, CompletionResponse types | ✅ |
-| `errors.go` | Error type with Retryable flag | ✅ |
-| `mock.go` | MockClient for testing | ✅ |
-| `claude_cli.go` | ClaudeCLI implementation | ✅ |
-
-### Observability Package (`pkg/flowgraph/observability/`)
-
-| File | Purpose | Status |
-|------|---------|--------|
-| `logger.go` | slog enrichment helpers | ✅ |
-| `metrics.go` | OpenTelemetry metrics (MetricsRecorder) | ✅ |
-| `tracing.go` | OpenTelemetry tracing (SpanManager) | ✅ |
-| `noop.go` | No-op implementations | ✅ |
-
-### Working Features
-
-- ✅ Fluent graph builder API
-- ✅ Type-safe generics for state
-- ✅ Linear and conditional execution
-- ✅ Loops with conditional exit
-- ✅ Panic recovery with stack traces
-- ✅ Context cancellation/timeout
-- ✅ Max iterations protection
-- ✅ Error wrapping with node context
-- ✅ Checkpoint persistence (SQLite, Memory)
-- ✅ Resume from checkpoint after crash
-- ✅ LLM client interface with streaming
-- ✅ Claude CLI integration
-- ✅ MockClient for testing
-- ✅ Structured logging via slog
-- ✅ OpenTelemetry metrics (node executions, latency, errors)
-- ✅ OpenTelemetry tracing (spans for runs and nodes)
-- ✅ No-op implementations for disabled observability
-
-### Usage Examples
+## Quick Start
 
 ```go
-// Basic graph execution
-graph := flowgraph.NewGraph[Counter]().
-    AddNode("inc1", increment).
-    AddNode("inc2", increment).
-    AddEdge("inc1", "inc2").
-    AddEdge("inc2", flowgraph.END).
-    SetEntry("inc1")
+// Build a graph
+graph := flowgraph.NewGraph[MyState]().
+    AddNode("process", processNode).
+    AddNode("validate", validateNode).
+    AddEdge("process", "validate").
+    AddEdge("validate", flowgraph.END).
+    SetEntry("process")
 
 compiled, _ := graph.Compile()
+
+// Run it
 ctx := flowgraph.NewContext(context.Background())
-result, _ := compiled.Run(ctx, Counter{Value: 0})
-// result.Value == 2
+result, err := compiled.Run(ctx, initialState)
 ```
 
+See `examples/` for complete runnable examples.
+
+---
+
+## Project Structure
+
+```
+flowgraph/
+├── CLAUDE.md              # This file - start here
+├── README.md              # User-facing documentation
+├── CONTRIBUTING.md        # Development guide
+├── go.mod
+├── pkg/flowgraph/         # Main package
+│   ├── doc.go             # Package documentation
+│   ├── *.go               # Core implementation
+│   ├── checkpoint/        # Checkpoint persistence
+│   │   └── CLAUDE.md      # Checkpoint package guide
+│   ├── llm/               # LLM client integration
+│   │   └── CLAUDE.md      # LLM package guide
+│   └── observability/     # Logging, metrics, tracing
+│       └── CLAUDE.md      # Observability guide
+├── examples/              # Runnable examples
+│   ├── linear/
+│   ├── conditional/
+│   ├── loop/
+│   ├── checkpointing/
+│   ├── llm/
+│   └── observability/
+├── benchmarks/            # Performance benchmarks
+├── docs/                  # Additional documentation
+│   ├── ARCHITECTURE.md    # System design
+│   └── DECISIONS.md       # Key ADRs summary
+└── .spec/                 # Implementation specs (historical)
+    ├── decisions/         # 27 ADRs
+    ├── phases/            # Phase specifications
+    └── features/          # Feature specifications
+```
+
+---
+
+## Key Packages
+
+### `pkg/flowgraph/` - Core Engine
+
+Graph building, compilation, and execution.
+
 ```go
-// With checkpointing
-store := checkpoint.NewMemoryStore()
+graph := flowgraph.NewGraph[S]()     // Create builder
+graph.AddNode("id", fn)              // Add node
+graph.AddEdge("from", "to")          // Add edge
+graph.AddConditionalEdge("from", fn) // Conditional routing
+graph.SetEntry("id")                 // Set entry point
+compiled, err := graph.Compile()     // Validate and compile
+result, err := compiled.Run(ctx, s)  // Execute
+```
+
+### `pkg/flowgraph/checkpoint/` - Persistence
+
+Crash recovery via checkpointing.
+
+```go
+store := checkpoint.NewSQLiteStore("./checkpoints.db")
 result, err := compiled.Run(ctx, state,
     flowgraph.WithCheckpointing(store),
     flowgraph.WithRunID("run-123"))
@@ -113,134 +107,127 @@ result, err := compiled.Run(ctx, state,
 result, err := compiled.Resume(ctx, store, "run-123")
 ```
 
+### `pkg/flowgraph/llm/` - LLM Integration
+
+Claude CLI integration with full feature support.
+
 ```go
-// With LLM client
-client := llm.NewClaudeCLI()
+client := llm.NewClaudeCLI(
+    llm.WithModel("sonnet"),
+    llm.WithOutputFormat(llm.OutputFormatJSON),
+    llm.WithDangerouslySkipPermissions(),
+    llm.WithMaxBudgetUSD(1.0),
+)
+
 ctx := flowgraph.NewContext(context.Background(), flowgraph.WithLLM(client))
 
-func myNode(ctx flowgraph.Context, s State) (State, error) {
-    resp, err := ctx.LLM().Complete(ctx, llm.CompletionRequest{
-        Messages: []llm.Message{{Role: llm.RoleUser, Content: "Hello"}},
-    })
-    // ...
-}
+// In node:
+resp, err := ctx.LLM().Complete(ctx, llm.CompletionRequest{...})
+// resp.SessionID, resp.CostUSD, resp.Usage available
 ```
 
+### `pkg/flowgraph/observability/` - Observability
+
+Structured logging, OpenTelemetry metrics and tracing.
+
 ```go
-// With observability
-logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 result, err := compiled.Run(ctx, state,
     flowgraph.WithObservabilityLogger(logger),
     flowgraph.WithMetrics(true),
-    flowgraph.WithTracing(true),
-    flowgraph.WithRunID("run-123"))
-
-// Logs: run/node start/complete/error with run_id, node_id, duration_ms
-// Metrics: flowgraph.node.executions, flowgraph.node.latency_ms, etc.
-// Spans: flowgraph.run > flowgraph.node.{id}
+    flowgraph.WithTracing(true))
 ```
-
----
-
-## What's Next
-
-### Phase 6: Polish
-
-Final phase - examples, documentation, and API review.
-
-**Key tasks**:
-- Example applications demonstrating all features
-- User documentation (getting started, API reference)
-- API surface review and cleanup
-- Performance benchmarks
-
----
-
-## Project Structure
-
-```
-flowgraph/
-├── CLAUDE.md              # This file
-├── go.mod                 # Module definition
-├── pkg/flowgraph/         # Main package
-│   ├── *.go               # Core implementation
-│   ├── *_test.go          # Core tests
-│   ├── checkpoint/        # ✅ Checkpoint package
-│   ├── llm/               # ✅ LLM client package
-│   └── observability/     # ✅ Observability package
-├── docs/                  # User documentation
-│   ├── OVERVIEW.md
-│   ├── ARCHITECTURE.md
-│   └── ...
-└── .spec/                 # Implementation specs
-    ├── SESSION_PROMPT.md  # Start here for next phase
-    ├── phases/            # Phase specifications
-    ├── features/          # Feature specifications
-    ├── decisions/         # 27 ADRs
-    └── tracking/
-        └── PROGRESS.md    # Detailed progress
-```
-
----
-
-## Key Decisions (Already Made)
-
-| Decision | Choice | ADR |
-|----------|--------|-----|
-| State management | Pass by value, return new | ADR-001 |
-| Error handling | Sentinel + typed + wrapping | ADR-002 |
-| Context | Custom wrapping context.Context | ADR-003 |
-| Validation | Panic at build, error at compile | ADR-007 |
-| Execution | Synchronous (parallel in v2) | ADR-010 |
-| Panics | Recover, convert to PanicError | ADR-011 |
-| Checkpoint format | JSON with metadata | ADR-014 |
-| Checkpoint store | Simple CRUD interface | ADR-015 |
-| Resume strategy | From node after last checkpoint | ADR-016 |
-| LLM interface | Complete + Stream methods | ADR-018 |
-| Streaming | Optional, node decides | ADR-020 |
-
-All 27 ADRs are in `.spec/decisions/`.
 
 ---
 
 ## Testing
 
 ```bash
-# Run all tests
-go test -race ./pkg/flowgraph/...
-
-# With coverage
-go test -coverprofile=coverage.out ./pkg/flowgraph/...
-go tool cover -func=coverage.out
+go test -race ./pkg/flowgraph/...              # All tests
+go test -coverprofile=coverage.out ./...       # With coverage
+go test -bench=. ./benchmarks/...              # Benchmarks
 ```
 
-**Current Coverage**:
-- flowgraph: 89.1%
-- checkpoint: 91.3%
-- llm: 74.7%
-- observability: 90.6%
+---
+
+## Key Design Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| State | Pass by value | Immutability, predictability |
+| Errors | Sentinel + typed | Go idioms, `errors.Is/As` support |
+| Context | Custom interface | Wrap context.Context with services |
+| Panics | Recover to PanicError | Safety, debugging |
+| Checkpoints | JSON + SQLite | Simplicity, debuggability |
+| LLM | Interface + CLI | Flexibility, Claude Code integration |
+
+Full ADRs in `.spec/decisions/`.
 
 ---
 
-## Quality Gates
+## Claude CLI Integration
 
-Before any phase is complete:
+The `llm.ClaudeCLI` client wraps the Claude Code CLI for LLM operations.
 
-- [ ] All tests pass (`go test -race ./...`)
-- [ ] Coverage meets target
-- [ ] No race conditions detected
-- [ ] `gofmt -s -w .` clean
-- [ ] `go vet ./...` clean
-- [ ] Godoc for all public types
+**Reference Implementation**: See `~/repos/ai-devtools/ensemble/core/runner.py` for battle-tested Python patterns.
+
+### Key Patterns
+
+```go
+// Production configuration
+client := llm.NewClaudeCLI(
+    llm.WithOutputFormat(llm.OutputFormatJSON),  // Always use JSON for token tracking
+    llm.WithDangerouslySkipPermissions(),        // Non-interactive execution
+    llm.WithMaxBudgetUSD(1.0),                   // Cap spending
+    llm.WithMaxTurns(10),                        // Limit agentic turns
+)
+```
+
+### Available Options
+
+| Option | Purpose |
+|--------|---------|
+| `WithOutputFormat(format)` | text, json, stream-json |
+| `WithSessionID(id)` | Track multi-turn conversations |
+| `WithContinue()` | Continue last session |
+| `WithResume(id)` | Resume specific session |
+| `WithSystemPrompt(s)` | Set system prompt |
+| `WithAppendSystemPrompt(s)` | Append to system prompt |
+| `WithDisallowedTools(tools)` | Blacklist tools |
+| `WithDangerouslySkipPermissions()` | Skip interactive prompts |
+| `WithMaxBudgetUSD(amount)` | Cap spending |
+| `WithMaxTurns(n)` | Limit agentic turns |
+
+### Response Data
+
+When using JSON output format:
+- `resp.SessionID` - Session identifier for multi-turn
+- `resp.CostUSD` - Total cost in USD
+- `resp.NumTurns` - Number of agentic turns
+- `resp.Usage.InputTokens` - Input token count
+- `resp.Usage.OutputTokens` - Output token count
+- `resp.Usage.CacheCreationInputTokens` - Cache write tokens
+- `resp.Usage.CacheReadInputTokens` - Cache read tokens
 
 ---
 
-## References
+## For Agents
 
-| Doc | Purpose |
-|-----|---------|
-| `.spec/SESSION_PROMPT.md` | Next implementation handoff |
-| `.spec/tracking/PROGRESS.md` | Detailed progress tracking |
-| `.spec/phases/PHASE-5-observability.md` | Next phase spec |
-| `.spec/knowledge/API_SURFACE.md` | Complete public API |
-| `.spec/knowledge/TESTING_STRATEGY.md` | Test patterns |
+### When modifying this codebase:
+
+1. **Read the relevant CLAUDE.md** in the package you're modifying
+2. **Check `.spec/decisions/`** for architectural decisions
+3. **Run tests with race detection** before committing
+4. **Follow existing patterns** - consistency over novelty
+
+### Quality gates:
+
+```bash
+go test -race ./...     # Must pass
+go vet ./...            # Must be clean
+gofmt -s -w .           # Must be applied
+```
+
+### Coverage targets:
+
+- Core packages: 85%+
+- Overall: 80%+
