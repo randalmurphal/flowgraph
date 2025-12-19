@@ -33,7 +33,7 @@ type runConfig struct {
 // defaultRunConfig returns the default execution configuration.
 func defaultRunConfig() runConfig {
 	return runConfig{
-		maxIterations:          1000,
+		maxIterations:          DefaultMaxIterations,
 		checkpointFailureFatal: false,
 		sequence:               0,
 		// Observability disabled by default (no overhead)
@@ -44,6 +44,10 @@ func defaultRunConfig() runConfig {
 
 // RunOption configures execution behavior.
 type RunOption func(*runConfig)
+
+// DefaultMaxIterations is the default maximum number of node executions.
+// This prevents infinite loops from hanging forever.
+const DefaultMaxIterations = 1000
 
 // MaxIterationsLimit is the maximum allowed value for WithMaxIterations.
 // This prevents accidental resource exhaustion from extremely high values.

@@ -96,16 +96,15 @@ func mustCompile(g *flowgraph.Graph[State]) *flowgraph.CompiledGraph[State] {
 }
 
 func buildLoopGraph(maxIterations int) *flowgraph.Graph[State] {
-	counter := 0
 	loopNode := func(ctx flowgraph.Context, s State) (State, error) {
 		s.Value++
 		return s, nil
 	}
 
+	// Use state-based iteration tracking instead of mutable closure variable.
+	// This ensures deterministic behavior across benchmark iterations.
 	router := func(ctx flowgraph.Context, s State) string {
-		counter++
-		if counter >= maxIterations {
-			counter = 0 // Reset for next run
+		if s.Value >= maxIterations {
 			return "done"
 		}
 		return "loop"

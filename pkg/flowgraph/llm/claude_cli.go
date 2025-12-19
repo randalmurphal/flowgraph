@@ -257,7 +257,7 @@ func (c *ClaudeCLI) Complete(ctx context.Context, req CompletionRequest) (*Compl
 			return nil, NewError("complete", ctx.Err(), false)
 		}
 
-		errMsg := stderr.String()
+		errMsg := sanitizeStderr(stderr.String())
 		retryable := isRetryableError(errMsg)
 		return nil, NewError("complete", fmt.Errorf("%w: %s", err, errMsg), retryable)
 	}
@@ -375,17 +375,40 @@ func (c *ClaudeCLI) buildArgsWithFormat(req CompletionRequest, format OutputForm
 	// Always use --print for non-interactive mode
 	args = append(args, "--print")
 
-	// Output format
+	// Output format and schema
+	args = c.appendOutputArgs(args, format)
+
+	// Session management
+	args = c.appendSessionArgs(args)
+
+	// Model and prompt configuration
+	args = c.appendModelArgs(args, req)
+
+	// Tool control
+	args = c.appendToolArgs(args)
+
+	// Permissions and settings
+	args = c.appendPermissionArgs(args)
+
+	// Build and append the actual prompt from messages
+	args = c.appendMessagePrompt(args, req.Messages)
+
+	return args
+}
+
+// appendOutputArgs adds output format arguments.
+func (c *ClaudeCLI) appendOutputArgs(args []string, format OutputFormat) []string {
 	if format != "" && format != OutputFormatText {
 		args = append(args, "--output-format", string(format))
 	}
-
-	// JSON schema for structured output
 	if c.jsonSchema != "" {
 		args = append(args, "--json-schema", c.jsonSchema)
 	}
+	return args
+}
 
-	// Session management
+// appendSessionArgs adds session management arguments.
+func (c *ClaudeCLI) appendSessionArgs(args []string) []string {
 	if c.sessionID != "" {
 		args = append(args, "--session-id", c.sessionID)
 	}
@@ -398,7 +421,11 @@ func (c *ClaudeCLI) buildArgsWithFormat(req CompletionRequest, format OutputForm
 	if c.noSessionPersistence {
 		args = append(args, "--no-session-persistence")
 	}
+	return args
+}
 
+// appendModelArgs adds model, prompt, and limit arguments.
+func (c *ClaudeCLI) appendModelArgs(args []string, req CompletionRequest) []string {
 	// System prompt handling
 	if c.systemPrompt != "" {
 		args = append(args, "--system-prompt", c.systemPrompt)
@@ -438,22 +465,31 @@ func (c *ClaudeCLI) buildArgsWithFormat(req CompletionRequest, format OutputForm
 		args = append(args, "--max-turns", fmt.Sprintf("%d", c.maxTurns))
 	}
 
-	// Tool control - allowed (whitelist)
+	return args
+}
+
+// appendToolArgs adds tool control arguments.
+func (c *ClaudeCLI) appendToolArgs(args []string) []string {
+	// Allowed tools (whitelist)
 	for _, tool := range c.allowedTools {
 		args = append(args, "--allowedTools", tool)
 	}
 
-	// Tool control - disallowed (blacklist)
+	// Disallowed tools (blacklist)
 	for _, tool := range c.disallowedTools {
 		args = append(args, "--disallowed-tools", tool)
 	}
 
-	// Tool control - exact tool set
+	// Exact tool set
 	if len(c.tools) > 0 {
 		args = append(args, "--tools", strings.Join(c.tools, ","))
 	}
 
-	// Permission handling
+	return args
+}
+
+// appendPermissionArgs adds permission and settings arguments.
+func (c *ClaudeCLI) appendPermissionArgs(args []string) []string {
 	if c.dangerouslySkipPermissions {
 		args = append(args, "--dangerously-skip-permissions")
 	}
@@ -471,10 +507,14 @@ func (c *ClaudeCLI) buildArgsWithFormat(req CompletionRequest, format OutputForm
 		args = append(args, "--add-dir", dir)
 	}
 
-	// Build prompt from messages
+	return args
+}
+
+// appendMessagePrompt converts messages to a CLI prompt and appends it.
+func (c *ClaudeCLI) appendMessagePrompt(args []string, messages []Message) []string {
 	// Claude CLI expects a single prompt, so concatenate user messages
 	var prompt strings.Builder
-	for _, msg := range req.Messages {
+	for _, msg := range messages {
 		switch msg.Role {
 		case RoleUser:
 			prompt.WriteString(msg.Content)
@@ -568,6 +608,20 @@ func isRetryableError(errMsg string) bool {
 		strings.Contains(errLower, "overloaded") ||
 		strings.Contains(errLower, "503") ||
 		strings.Contains(errLower, "529")
+}
+
+// maxStderrLength limits stderr output in error messages to prevent
+// leaking sensitive information and keeping errors readable.
+const maxStderrLength = 500
+
+// sanitizeStderr prepares stderr output for inclusion in error messages.
+// It truncates long output and redacts common sensitive patterns.
+func sanitizeStderr(stderr string) string {
+	// Truncate if too long
+	if len(stderr) > maxStderrLength {
+		stderr = stderr[:maxStderrLength] + "... (truncated)"
+	}
+	return strings.TrimSpace(stderr)
 }
 
 // streamEvent represents a streaming API event from claude.

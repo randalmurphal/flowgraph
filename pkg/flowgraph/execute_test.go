@@ -325,30 +325,40 @@ func TestRun_CancellationBetweenNodes(t *testing.T) {
 
 // TestRun_Timeout tests timeout behavior.
 func TestRun_Timeout(t *testing.T) {
+	// Test cancellation is detected BETWEEN node executions.
+	// The library checks ctx.Done() before each node, not during node execution.
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
+	nodeCount := 0
 	slowNode := func(fgCtx Context, s State) (State, error) {
-		time.Sleep(200 * time.Millisecond)
+		nodeCount++
+		time.Sleep(100 * time.Millisecond) // Longer than timeout
 		return s, nil
 	}
 
 	graph := NewGraph[State]().
-		AddNode("slow", slowNode).
-		AddEdge("slow", END).
-		SetEntry("slow")
+		AddNode("slow1", slowNode).
+		AddNode("slow2", slowNode).
+		AddEdge("slow1", "slow2").
+		AddEdge("slow2", END).
+		SetEntry("slow1")
 
 	compiled, err := graph.Compile()
 	require.NoError(t, err)
 
 	_, err = compiled.Run(NewContext(ctx), State{})
 
-	// Note: The node itself doesn't check for cancellation during sleep,
-	// so it may complete. The important thing is eventual timeout behavior.
-	// In real usage, nodes should check ctx.Done() for long operations.
-	if err != nil {
-		assert.ErrorIs(t, err, context.DeadlineExceeded)
-	}
+	// The first node completes (takes 100ms), then the library checks ctx.Done()
+	// before the second node. Since 100ms > 50ms timeout, ctx is cancelled.
+	require.Error(t, err, "Expected cancellation error")
+
+	var cancelErr *CancellationError
+	require.ErrorAs(t, err, &cancelErr, "Expected CancellationError type")
+	assert.Equal(t, "slow2", cancelErr.NodeID, "Cancellation should be detected before slow2")
+	assert.False(t, cancelErr.WasExecuting, "Node should not have started executing")
+	assert.ErrorIs(t, cancelErr.Cause, context.DeadlineExceeded)
+	assert.Equal(t, 1, nodeCount, "Only first node should have executed")
 }
 
 // TestRun_MaxIterations_PreventsInfiniteLoop tests max iterations limit.
@@ -448,6 +458,30 @@ func TestRun_RouterReturnsUnknown_Error(t *testing.T) {
 	assert.Equal(t, "route", routerErr.FromNode)
 	assert.Equal(t, "nonexistent", routerErr.Returned)
 	assert.ErrorIs(t, err, ErrRouterTargetNotFound)
+}
+
+// TestRun_RouterPanics_Recovered tests router panic is recovered.
+func TestRun_RouterPanics_Recovered(t *testing.T) {
+	router := func(ctx Context, s State) string {
+		panic("router panic!")
+	}
+
+	graph := NewGraph[State]().
+		AddNode("route", passthrough[State]).
+		AddConditionalEdge("route", router).
+		SetEntry("route")
+
+	compiled, err := graph.Compile()
+	require.NoError(t, err)
+
+	_, err = compiled.Run(testCtx(), State{})
+
+	require.Error(t, err)
+	var panicErr *PanicError
+	require.ErrorAs(t, err, &panicErr)
+	assert.Equal(t, "route", panicErr.NodeID)
+	assert.Equal(t, "router panic!", panicErr.Value)
+	assert.Contains(t, panicErr.Stack, "runtime/debug.Stack")
 }
 
 // TestRun_ContextPropagated tests context is passed to nodes.

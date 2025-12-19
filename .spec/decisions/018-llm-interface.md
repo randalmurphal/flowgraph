@@ -16,59 +16,86 @@ What interface should LLM clients implement? Need to support:
 
 ## Decision
 
-**Simple interface with Complete and Stream methods.**
+**Simple interface with Complete and Stream methods, using Messages for conversation history.**
 
 ```go
-// LLMClient provides LLM completion capabilities
-type LLMClient interface {
-    // Complete sends a prompt and waits for full response
+// Client provides LLM completion capabilities
+type Client interface {
+    // Complete sends messages and waits for full response
     Complete(ctx context.Context, req CompletionRequest) (*CompletionResponse, error)
 
-    // Stream sends a prompt and returns a channel of response chunks
+    // Stream sends messages and returns a channel of response chunks
     Stream(ctx context.Context, req CompletionRequest) (<-chan StreamChunk, error)
 }
 
 // CompletionRequest configures an LLM call
 type CompletionRequest struct {
-    // Required
-    Prompt string
+    // Messages is the conversation history (user/assistant turns)
+    Messages []Message
 
     // Optional
-    SystemPrompt string
+    SystemPrompt string  // System-level instructions
+    Model        string  // Provider-specific model ID
     MaxTokens    int
     Temperature  float64
-    Model        string        // Provider-specific model ID
-    Timeout      time.Duration // Per-request timeout
-
-    // Files/context
-    Files        []File        // Files to include in context
-    WorkDir      string        // Working directory for file references
+    Tools        []Tool           // Available tools for function calling
+    Options      map[string]any   // Provider-specific options
 }
 
-type File struct {
-    Path    string
-    Content []byte  // If set, use this instead of reading from Path
+type Message struct {
+    Role    Role   // "user", "assistant", "tool", "system"
+    Content string
+    Name    string // For tool results
 }
+
+type Role string
+
+const (
+    RoleUser      Role = "user"
+    RoleAssistant Role = "assistant"
+    RoleTool      Role = "tool"
+    RoleSystem    Role = "system"
+)
 
 // CompletionResponse contains the full response
 type CompletionResponse struct {
-    Text       string
-    TokensIn   int
-    TokensOut  int
-    Model      string
-    Duration   time.Duration
-    FinishReason string  // "end_turn", "max_tokens", etc.
+    Content      string
+    ToolCalls    []ToolCall    // If model wants to call tools
+    Usage        TokenUsage
+    Model        string
+    Duration     time.Duration
+    FinishReason string        // "stop", "max_tokens", "tool_use", etc.
+
+    // Claude CLI specific (when using JSON output)
+    SessionID string
+    CostUSD   float64
+    NumTurns  int
+}
+
+type TokenUsage struct {
+    InputTokens  int
+    OutputTokens int
+    TotalTokens  int
+
+    // Cache tokens (Claude specific)
+    CacheCreationInputTokens int
+    CacheReadInputTokens     int
 }
 
 // StreamChunk is a piece of a streaming response
 type StreamChunk struct {
-    Text     string
-    Done     bool
-    Error    error
-    TokensIn int  // Only set on final chunk
-    TokensOut int // Only set on final chunk
+    Content   string
+    ToolCalls []ToolCall
+    Usage     *TokenUsage  // Only set in final chunk
+    Done      bool
+    Error     error
 }
 ```
+
+**Note on evolution**: Originally designed with a single `Prompt string` field (rejected option #4 "Chat-Based Interface" was seen as over-engineered). During implementation, we adopted `Messages []Message` because:
+1. Claude CLI naturally works with conversation context
+2. Tool calling requires multi-turn conversations
+3. The Messages approach aligns with modern LLM APIs
 
 ## Alternatives Considered
 
@@ -325,24 +352,24 @@ func (m *MockLLM) Stream(ctx context.Context, req CompletionRequest) (<-chan Str
 client := llm.NewClaudeCLI()
 
 resp, err := client.Complete(ctx, llm.CompletionRequest{
-    Prompt: "What is the capital of France?",
+    Messages: []llm.Message{
+        {Role: llm.RoleUser, Content: "What is the capital of France?"},
+    },
 })
 if err != nil {
     return err
 }
 
-fmt.Println(resp.Text)  // "Paris"
+fmt.Println(resp.Content)  // "Paris"
 ```
 
-### With System Prompt and Files
+### With System Prompt
 
 ```go
 resp, err := client.Complete(ctx, llm.CompletionRequest{
     SystemPrompt: "You are a code reviewer. Be thorough but constructive.",
-    Prompt:       "Review this code for issues.",
-    Files: []llm.File{
-        {Path: "main.go"},
-        {Path: "handler.go"},
+    Messages: []llm.Message{
+        {Role: llm.RoleUser, Content: "Review this code for issues."},
     },
     MaxTokens: 4000,
 })
@@ -352,7 +379,9 @@ resp, err := client.Complete(ctx, llm.CompletionRequest{
 
 ```go
 chunks, err := client.Stream(ctx, llm.CompletionRequest{
-    Prompt: "Write a poem about Go programming.",
+    Messages: []llm.Message{
+        {Role: llm.RoleUser, Content: "Write a poem about Go programming."},
+    },
 })
 if err != nil {
     return err
@@ -363,10 +392,10 @@ for chunk := range chunks {
         return chunk.Error
     }
     if chunk.Done {
-        fmt.Printf("\n[Tokens: in=%d, out=%d]\n", chunk.TokensIn, chunk.TokensOut)
+        fmt.Printf("\n[Tokens: in=%d, out=%d]\n", chunk.Usage.InputTokens, chunk.Usage.OutputTokens)
         break
     }
-    fmt.Print(chunk.Text)
+    fmt.Print(chunk.Content)
 }
 ```
 
@@ -374,22 +403,24 @@ for chunk := range chunks {
 
 ```go
 func generateSpecNode(ctx flowgraph.Context, state TicketState) (TicketState, error) {
-    llm := ctx.LLM()
-    if llm == nil {
+    client := ctx.LLM()
+    if client == nil {
         return state, errors.New("LLM client not configured")
     }
 
-    resp, err := llm.Complete(ctx, llm.CompletionRequest{
+    resp, err := client.Complete(ctx, llm.CompletionRequest{
         SystemPrompt: specGenerationSystemPrompt,
-        Prompt:       fmt.Sprintf(specPromptTemplate, state.Ticket.Description),
-        MaxTokens:    8000,
+        Messages: []llm.Message{
+            {Role: llm.RoleUser, Content: fmt.Sprintf(specPromptTemplate, state.Ticket.Description)},
+        },
+        MaxTokens: 8000,
     })
     if err != nil {
         return state, fmt.Errorf("generate spec: %w", err)
     }
 
-    state.Spec = resp.Text
-    state.TokensUsed += resp.TokensIn + resp.TokensOut
+    state.Spec = resp.Content
+    state.TokensUsed += resp.Usage.TotalTokens
     return state, nil
 }
 ```
@@ -400,33 +431,33 @@ func generateSpecNode(ctx flowgraph.Context, state TicketState) (TicketState, er
 
 ```go
 func TestLLMClient_Complete(t *testing.T) {
-    mock := &MockLLM{
-        Response: "The capital of France is Paris.",
-    }
+    mock := llm.NewMockClient("The capital of France is Paris.")
 
     resp, err := mock.Complete(context.Background(), llm.CompletionRequest{
-        Prompt: "What is the capital of France?",
+        Messages: []llm.Message{
+            {Role: llm.RoleUser, Content: "What is the capital of France?"},
+        },
     })
 
     require.NoError(t, err)
-    assert.Equal(t, "The capital of France is Paris.", resp.Text)
-    assert.Len(t, mock.Calls, 1)
-    assert.Equal(t, "What is the capital of France?", mock.Calls[0].Prompt)
+    assert.Equal(t, "The capital of France is Paris.", resp.Content)
+    assert.Len(t, mock.Calls(), 1)
 }
 
 func TestLLMClient_Timeout(t *testing.T) {
     client := llm.NewClaudeCLI(
-        llm.WithBinary("sleep"),  // Mock with sleep command
+        llm.WithClaudePath("sleep"),  // Mock with sleep command
     )
 
     ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
     defer cancel()
 
     _, err := client.Complete(ctx, llm.CompletionRequest{
-        Prompt: "100",  // sleep 100 seconds
+        Messages: []llm.Message{
+            {Role: llm.RoleUser, Content: "100"},  // sleep 100 seconds
+        },
     })
 
     require.Error(t, err)
-    assert.Contains(t, err.Error(), "timed out")
 }
 ```

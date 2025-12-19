@@ -12,6 +12,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// MaxCheckpointSize is the maximum allowed size for a serialized checkpoint.
+// This prevents memory exhaustion from extremely large state objects.
+// Default: 100MB. If you need larger checkpoints, consider chunking your state.
+const MaxCheckpointSize = 100 * 1024 * 1024 // 100MB
+
 // Run executes the graph with the given initial state.
 // Returns the final state and any error encountered.
 //
@@ -210,6 +215,20 @@ func (cg *CompiledGraph[S]) saveCheckpointWithObservability(ctx Context, cfg *ru
 		return nil
 	}
 
+	// Check size limit to prevent memory exhaustion
+	if len(stateBytes) > MaxCheckpointSize {
+		err := fmt.Errorf("checkpoint size %d exceeds limit %d", len(stateBytes), MaxCheckpointSize)
+		if cfg.checkpointFailureFatal {
+			return &CheckpointError{
+				NodeID: nodeID,
+				Op:     "size_check",
+				Err:    err,
+			}
+		}
+		observability.LogCheckpointError(cfg.logger, nodeID, "size_check", err)
+		return nil
+	}
+
 	// Create checkpoint
 	cfg.sequence++
 	cp := checkpoint.New(cfg.runID, nodeID, cfg.sequence, stateBytes, nextNode).
@@ -298,7 +317,7 @@ func (cg *CompiledGraph[S]) executeNode(ctx Context, nodeID string, state S) (re
 
 // nextNode determines the next node to execute.
 // Checks conditional edges first, then simple edges.
-func (cg *CompiledGraph[S]) nextNode(ctx Context, state S, current string) (string, error) {
+func (cg *CompiledGraph[S]) nextNode(ctx Context, state S, current string) (next string, err error) {
 	// Check for conditional edge first
 	if router, exists := cg.getRouter(current); exists {
 		// Create node-specific context for the router
@@ -307,7 +326,19 @@ func (cg *CompiledGraph[S]) nextNode(ctx Context, state S, current string) (stri
 			routerCtx = ec.withNodeID(current)
 		}
 
-		next := router(routerCtx, state)
+		// Panic recovery for router functions
+		defer func() {
+			if r := recover(); r != nil {
+				next = ""
+				err = &PanicError{
+					NodeID: current,
+					Value:  r,
+					Stack:  string(debug.Stack()),
+				}
+			}
+		}()
+
+		next = router(routerCtx, state)
 
 		// Validate router result
 		if next == "" {

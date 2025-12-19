@@ -20,7 +20,22 @@ type SQLiteStore struct {
 
 // NewSQLiteStore creates a new SQLite checkpoint store.
 // The path should be a file path (e.g., "./checkpoints.db") or ":memory:" for testing.
+//
+// The database file is created with restrictive permissions (0600) to protect
+// checkpoint data which may contain sensitive state.
 func NewSQLiteStore(path string) (*SQLiteStore, error) {
+	// Create file with restrictive permissions BEFORE sql.Open touches it.
+	// This prevents a TOCTOU race where the file is briefly world-readable.
+	if path != ":memory:" {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			f, createErr := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+			if createErr == nil {
+				f.Close()
+			}
+			// Ignore error - file might have been created between Stat and OpenFile
+		}
+	}
+
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
@@ -55,12 +70,10 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("create index: %w", err)
 	}
 
-	// Set restrictive file permissions (owner read/write only)
-	// Skip for in-memory databases
+	// Ensure permissions are correct for existing files
 	if path != ":memory:" {
 		if err := os.Chmod(path, 0600); err != nil {
-			// Log but don't fail - file may not exist yet or may be read-only
-			// The chmod will succeed on subsequent saves
+			// Non-fatal: file might be read-only or on a filesystem that doesn't support chmod
 		}
 	}
 
