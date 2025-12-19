@@ -32,13 +32,18 @@ result, _ := compiled.Run(ctx, Counter{})
 
 ### With Checkpointing
 ```go
-store := checkpoint.NewSQLiteStore("./checkpoints.db")
-result, _ := compiled.Run(ctx, state,
+store, err := checkpoint.NewSQLiteStore("./checkpoints.db")
+if err != nil {
+    log.Fatal(err)
+}
+defer store.Close()
+
+result, err := compiled.Run(ctx, state,
     flowgraph.WithCheckpointing(store),
     flowgraph.WithRunID("run-123"))
 
 // Resume after crash
-result, _ := compiled.Resume(ctx, store, "run-123")
+result, err = compiled.Resume(ctx, store, "run-123")
 ```
 
 ### With LLM
@@ -67,6 +72,18 @@ See `examples/` for complete working examples.
 - **Crash recovery** via checkpointing
 - **LLM integration** with Claude CLI (token/cost tracking)
 - **Observability** via slog + OpenTelemetry
+
+---
+
+## Important Behavior
+
+| Behavior | Default | Override |
+|----------|---------|----------|
+| Checkpoint failures | **Fatal** (stops execution) | `WithCheckpointFailureFatal(false)` |
+| Max iterations | 1000 | `WithMaxIterations(n)` |
+| JSON parse fallback | Logs warning, returns zero tokens | Expected when CLI returns text |
+
+**Error Philosophy**: Errors are surfaced, not swallowed. If something fails, you'll know.
 
 ---
 
@@ -105,7 +122,7 @@ go test -race ./pkg/flowgraph/...
 go test -coverprofile=coverage.out ./pkg/flowgraph/...
 ```
 
-**Coverage**: flowgraph: 95.4%, checkpoint: 91.7%, llm: 93.2%, observability: 90.6%
+**Coverage**: flowgraph: 95.4%, checkpoint: 90.1%, llm: 93.8%, observability: 90.6%
 
 ---
 
