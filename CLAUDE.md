@@ -16,6 +16,10 @@
 | `pkg/flowgraph/errors/` | Error handling strategies | `Category`, `RetryConfig`, `Handler` |
 | `pkg/flowgraph/expr/` | Expression evaluation | `Evaluator`, `Eval`, `BinaryOp` |
 | `pkg/flowgraph/llm/` | LLM client interface | `Client`, `ClaudeCLI`, `MockClient` |
+| `pkg/flowgraph/llm/tokens/` | Token counting, budget, model limits | `Counter`, `Budget`, `ModelLimits` |
+| `pkg/flowgraph/llm/truncate/` | Truncation strategies (FromEnd, FromMiddle, FromStart) | `Strategy`, `Truncator`, `Options` |
+| `pkg/flowgraph/llm/template/` | Prompt templates with Handlebars syntax | `Engine`, `Template`, `Render` |
+| `pkg/flowgraph/llm/parser/` | Extract JSON, YAML, code blocks from responses | `Parser`, `Extract`, `CodeBlock` |
 | `pkg/flowgraph/model/` | Model selection & cost | `ModelName`, `Selector`, `EscalationChain`, `CostTracker` |
 | `pkg/flowgraph/observability/` | Logging/metrics/tracing | `MetricsRecorder`, `SpanManager` |
 | `pkg/flowgraph/registry/` | Generic thread-safe registry | `Registry[K,V]`, `GetOrCreate`, `Range` |

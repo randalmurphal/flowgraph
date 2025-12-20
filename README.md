@@ -212,6 +212,10 @@ github.com/randalmurphal/flowgraph/
 │   ├── errors/               # Error categorization (Transient, Permanent, etc.)
 │   ├── expr/                 # Expression evaluation for conditions
 │   ├── llm/                  # LLM client interface
+│   │   ├── tokens/           # Token counting and budget management
+│   │   ├── truncate/         # Text truncation strategies
+│   │   ├── template/         # Prompt template engine
+│   │   └── parser/           # LLM response parsing
 │   ├── model/                # Model interfaces
 │   ├── observability/        # Logging, metrics, tracing
 │   ├── registry/             # Generic thread-safe registry
