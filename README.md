@@ -208,8 +208,14 @@ Execution overhead is minimal:
 github.com/randalmurphal/flowgraph/
 ├── pkg/flowgraph/            # Core orchestration
 │   ├── checkpoint/           # Checkpoint storage
+│   ├── config/               # Type-safe configuration extraction
+│   ├── errors/               # Error categorization (Transient, Permanent, etc.)
+│   ├── expr/                 # Expression evaluation for conditions
 │   ├── llm/                  # LLM client interface
-│   └── observability/        # Logging, metrics, tracing
+│   ├── model/                # Model interfaces
+│   ├── observability/        # Logging, metrics, tracing
+│   ├── registry/             # Generic thread-safe registry
+│   └── template/             # Variable expansion (${var}, $var)
 ├── examples/                 # Working examples
 └── benchmarks/               # Performance benchmarks
 ```

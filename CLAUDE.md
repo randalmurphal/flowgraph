@@ -12,10 +12,14 @@
 |---------|---------|-----------|
 | `pkg/flowgraph/` | Core orchestration | `Graph[S]`, `CompiledGraph[S]`, `Context`, `NodeFunc[S]` |
 | `pkg/flowgraph/checkpoint/` | State persistence | `Store`, `MemoryStore`, `SQLiteStore` |
-| `pkg/flowgraph/llm/` | LLM client interface | `Client`, `ClaudeCLI`, `MockClient` |
-| `pkg/flowgraph/observability/` | Logging/metrics/tracing | `MetricsRecorder`, `SpanManager` |
-| `pkg/flowgraph/model/` | Model selection & cost | `ModelName`, `Selector`, `EscalationChain`, `CostTracker` |
+| `pkg/flowgraph/config/` | Type-safe config extraction | `Config`, `FromFile`, `FromYAML`, `FromJSON` |
 | `pkg/flowgraph/errors/` | Error handling strategies | `Category`, `RetryConfig`, `Handler` |
+| `pkg/flowgraph/expr/` | Expression evaluation | `Evaluator`, `Eval`, `BinaryOp` |
+| `pkg/flowgraph/llm/` | LLM client interface | `Client`, `ClaudeCLI`, `MockClient` |
+| `pkg/flowgraph/model/` | Model selection & cost | `ModelName`, `Selector`, `EscalationChain`, `CostTracker` |
+| `pkg/flowgraph/observability/` | Logging/metrics/tracing | `MetricsRecorder`, `SpanManager` |
+| `pkg/flowgraph/registry/` | Generic thread-safe registry | `Registry[K,V]`, `GetOrCreate`, `Range` |
+| `pkg/flowgraph/template/` | Variable expansion | `Expander`, `Expand`, `ExpandAll`, `ExpandMap` |
 
 ---
 
