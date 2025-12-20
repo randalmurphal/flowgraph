@@ -14,6 +14,8 @@
 | `pkg/flowgraph/checkpoint/` | State persistence | `Store`, `MemoryStore`, `SQLiteStore` |
 | `pkg/flowgraph/llm/` | LLM client interface | `Client`, `ClaudeCLI`, `MockClient` |
 | `pkg/flowgraph/observability/` | Logging/metrics/tracing | `MetricsRecorder`, `SpanManager` |
+| `pkg/flowgraph/model/` | Model selection & cost | `ModelName`, `Selector`, `EscalationChain`, `CostTracker` |
+| `pkg/flowgraph/errors/` | Error handling strategies | `Category`, `RetryConfig`, `Handler` |
 
 ---
 
@@ -58,6 +60,32 @@ result, _ := compiled.Run(ctx, state,
     flowgraph.WithObservabilityLogger(slog.Default()),
     flowgraph.WithMetrics(true),
     flowgraph.WithTracing(true))
+```
+
+### Model Selection
+```go
+import "github.com/rmurphy/flowgraph/pkg/flowgraph/model"
+
+selector := model.NewSelector(
+    model.WithThinkingModel(model.ModelOpus),
+    model.WithDefaultModel(model.ModelSonnet),
+    model.WithFastModel(model.ModelHaiku),
+)
+m := selector.SelectForTier(model.TierThinking) // returns ModelOpus
+```
+
+### Error Handling with Retry & Escalation
+```go
+import "github.com/rmurphy/flowgraph/pkg/flowgraph/errors"
+
+handler := errors.NewHandler(
+    errors.WithRetryConfig(errors.DefaultRetry),
+    errors.WithEscalation(&model.DefaultEscalation),
+)
+result := handler.Execute(ctx, model.ModelSonnet, func(ctx context.Context, m model.ModelName) error {
+    // Your LLM operation here - will retry transient errors, escalate model on failures
+    return nil
+})
 ```
 
 See `examples/` for complete working examples.
@@ -122,7 +150,7 @@ go test -race ./pkg/flowgraph/...
 go test -coverprofile=coverage.out ./pkg/flowgraph/...
 ```
 
-**Coverage**: flowgraph: 95.4%, checkpoint: 90.1%, llm: 93.8%, observability: 90.6%
+**Coverage**: flowgraph: 95.4%, checkpoint: 90.1%, llm: 93.8%, observability: 90.6%, model: 92.8%, errors: 84.8%
 
 ---
 
