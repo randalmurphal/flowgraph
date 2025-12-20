@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/rmurphy/flowgraph/pkg/flowgraph"
-	"github.com/rmurphy/flowgraph/pkg/flowgraph/llm"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph/llm"
 )
 
 // State holds the conversation data.

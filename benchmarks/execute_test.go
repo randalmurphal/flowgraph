@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/rmurphy/flowgraph/pkg/flowgraph"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph"
 )
 
 // BenchmarkRun_Linear_5 runs a 5-node linear graph.

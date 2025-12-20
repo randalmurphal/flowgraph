@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rmurphy/flowgraph/pkg/flowgraph/checkpoint"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph/checkpoint"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

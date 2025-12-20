@@ -5,8 +5,8 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
-	"github.com/rmurphy/flowgraph/pkg/flowgraph/checkpoint"
-	"github.com/rmurphy/flowgraph/pkg/flowgraph/llm"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph/checkpoint"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph/llm"
 )
 
 // Context provides execution context to nodes.

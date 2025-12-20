@@ -11,7 +11,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/rmurphy/flowgraph/pkg/flowgraph"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph"
 )
 
 // State holds processing data.

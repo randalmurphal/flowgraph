@@ -3,7 +3,7 @@ package benchmarks
 import (
 	"testing"
 
-	"github.com/rmurphy/flowgraph/pkg/flowgraph"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph"
 )
 
 // State for benchmarks.

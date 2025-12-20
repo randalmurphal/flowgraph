@@ -7,8 +7,8 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/rmurphy/flowgraph/pkg/flowgraph/checkpoint"
-	"github.com/rmurphy/flowgraph/pkg/flowgraph/observability"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph/checkpoint"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph/observability"
 	"go.opentelemetry.io/otel/trace"
 )
 

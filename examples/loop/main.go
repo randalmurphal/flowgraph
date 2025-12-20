@@ -10,7 +10,7 @@ import (
 	"log"
 	"math/rand"
 
-	"github.com/rmurphy/flowgraph/pkg/flowgraph"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph"
 )
 
 // State holds retry tracking data.

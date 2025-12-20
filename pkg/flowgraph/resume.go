@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/rmurphy/flowgraph/pkg/flowgraph/checkpoint"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph/checkpoint"
 )
 
 // Resume continues execution from the last checkpoint for a run.

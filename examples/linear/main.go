@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/rmurphy/flowgraph/pkg/flowgraph"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph"
 )
 
 // State holds data that flows through the graph.

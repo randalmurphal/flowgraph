@@ -3,8 +3,8 @@ package flowgraph
 import (
 	"log/slog"
 
-	"github.com/rmurphy/flowgraph/pkg/flowgraph/checkpoint"
-	"github.com/rmurphy/flowgraph/pkg/flowgraph/observability"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph/checkpoint"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph/observability"
 )
 
 // runConfig holds configuration for graph execution.

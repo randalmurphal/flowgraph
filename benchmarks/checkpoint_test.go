@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rmurphy/flowgraph/pkg/flowgraph"
-	"github.com/rmurphy/flowgraph/pkg/flowgraph/checkpoint"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph"
+	"github.com/randalmurphal/flowgraph/pkg/flowgraph/checkpoint"
 )
 
 // LargeState represents a larger state for realistic benchmarks.

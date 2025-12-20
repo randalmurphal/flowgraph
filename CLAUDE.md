@@ -64,7 +64,7 @@ result, _ := compiled.Run(ctx, state,
 
 ### Model Selection
 ```go
-import "github.com/rmurphy/flowgraph/pkg/flowgraph/model"
+import "github.com/randalmurphal/flowgraph/pkg/flowgraph/model"
 
 selector := model.NewSelector(
     model.WithThinkingModel(model.ModelOpus),
@@ -76,7 +76,7 @@ m := selector.SelectForTier(model.TierThinking) // returns ModelOpus
 
 ### Error Handling with Retry & Escalation
 ```go
-import "github.com/rmurphy/flowgraph/pkg/flowgraph/errors"
+import "github.com/randalmurphal/flowgraph/pkg/flowgraph/errors"
 
 handler := errors.NewHandler(
     errors.WithRetryConfig(errors.DefaultRetry),

@@ -1,4 +1,4 @@
-module github.com/rmurphy/flowgraph
+module github.com/randalmurphal/flowgraph
 
 go 1.24.0
 

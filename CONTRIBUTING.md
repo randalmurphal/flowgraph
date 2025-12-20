@@ -12,7 +12,7 @@ Thank you for your interest in contributing to flowgraph!
 ### Clone and Build
 
 ```bash
-git clone https://github.com/rmurphy/flowgraph.git
+git clone https://github.com/randalmurphal/flowgraph.git
 cd flowgraph
 go build ./...
 ```

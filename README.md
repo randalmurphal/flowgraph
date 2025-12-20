@@ -1,7 +1,7 @@
 # flowgraph
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/rmurphy/flowgraph.svg)](https://pkg.go.dev/github.com/rmurphy/flowgraph)
-[![Go Report Card](https://goreportcard.com/badge/github.com/rmurphy/flowgraph)](https://goreportcard.com/report/github.com/rmurphy/flowgraph)
+[![Go Reference](https://pkg.go.dev/badge/github.com/randalmurphal/flowgraph.svg)](https://pkg.go.dev/github.com/randalmurphal/flowgraph)
+[![Go Report Card](https://goreportcard.com/badge/github.com/randalmurphal/flowgraph)](https://goreportcard.com/report/github.com/randalmurphal/flowgraph)
 
 **Graph-based LLM orchestration for Go.** Define workflows as directed graphs with typed state, conditional branching, checkpointing, and observability.
 
@@ -17,7 +17,7 @@
 ## Installation
 
 ```bash
-go get github.com/rmurphy/flowgraph
+go get github.com/randalmurphal/flowgraph
 ```
 
 Requires Go 1.22 or later.
@@ -32,7 +32,7 @@ import (
     "fmt"
     "log"
 
-    "github.com/rmurphy/flowgraph/pkg/flowgraph"
+    "github.com/randalmurphal/flowgraph/pkg/flowgraph"
 )
 
 type Counter struct {
@@ -110,7 +110,7 @@ graph := flowgraph.NewGraph[RetryState]().
 Enable crash recovery with SQLite or in-memory storage:
 
 ```go
-import "github.com/rmurphy/flowgraph/pkg/flowgraph/checkpoint"
+import "github.com/randalmurphal/flowgraph/pkg/flowgraph/checkpoint"
 
 store, err := checkpoint.NewSQLiteStore("./checkpoints.db")
 if err != nil {
@@ -131,7 +131,7 @@ result, err = compiled.Resume(ctx, store, "run-123")
 Use Claude CLI with full token tracking:
 
 ```go
-import "github.com/rmurphy/flowgraph/pkg/flowgraph/llm"
+import "github.com/randalmurphal/flowgraph/pkg/flowgraph/llm"
 
 client := llm.NewClaudeCLI(
     llm.WithModel("sonnet"),
@@ -205,7 +205,7 @@ Execution overhead is minimal:
 ## Package Structure
 
 ```
-github.com/rmurphy/flowgraph/
+github.com/randalmurphal/flowgraph/
 ├── pkg/flowgraph/            # Core orchestration
 │   ├── checkpoint/           # Checkpoint storage
 │   ├── llm/                  # LLM client interface
@@ -216,7 +216,7 @@ github.com/rmurphy/flowgraph/
 
 ## Documentation
 
-- [API Reference](https://pkg.go.dev/github.com/rmurphy/flowgraph) - godoc
+- [API Reference](https://pkg.go.dev/github.com/randalmurphal/flowgraph) - godoc
 - [CLAUDE.md](./CLAUDE.md) - AI-readable project reference
 - [docs/](./docs) - Detailed architecture and concepts
 

@@ -50,7 +50,7 @@
     {
       "file": "README.md",
       "line": 3,
-      "issue": "Badge URLs reference 'github.com/rmurphy/flowgraph' but this is not a public repository URL. These badges will not work until the repository is published.",
+      "issue": "Badge URLs reference 'github.com/randalmurphal/flowgraph' but this is not a public repository URL. These badges will not work until the repository is published.",
       "actual_location": "N/A - external service configuration needed",
       "fix": "Either remove badge placeholders or update to correct repository URL when published. Change 'rmurphy' to actual GitHub username.",
       "severity": "CRITICAL"
