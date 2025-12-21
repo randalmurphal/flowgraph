@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -118,7 +119,8 @@ func newOtelMetrics() (*otelMetrics, error) {
 func NewMetricsRecorder() MetricsRecorder {
 	m, err := getDefaultMetrics()
 	if err != nil {
-		// Fall back to no-op if initialization fails
+		slog.Warn("metrics initialization failed, using no-op recorder",
+			slog.String("error", err.Error()))
 		return NoopMetrics{}
 	}
 	return m

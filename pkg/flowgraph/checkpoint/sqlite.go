@@ -2,6 +2,7 @@ package checkpoint
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -136,7 +137,7 @@ func (s *SQLiteStore) Load(runID, nodeID string) ([]byte, error) {
 		WHERE run_id = ? AND node_id = ?
 	`, runID, nodeID).Scan(&data)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {

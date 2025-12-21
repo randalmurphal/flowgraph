@@ -2,6 +2,7 @@ package flowgraph
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/randalmurphal/flowgraph/pkg/flowgraph/checkpoint"
@@ -47,7 +48,7 @@ func (cg *CompiledGraph[S]) Resume(ctx Context, store checkpoint.Store, runID st
 	// Unmarshal checkpoint
 	cp, err := checkpoint.Unmarshal(data)
 	if err != nil {
-		return zero, fmt.Errorf("%w: %v", ErrDeserializeState, err)
+		return zero, fmt.Errorf("%w: %w", ErrDeserializeState, err)
 	}
 
 	// Check version compatibility
@@ -59,7 +60,7 @@ func (cg *CompiledGraph[S]) Resume(ctx Context, store checkpoint.Store, runID st
 	// Deserialize state
 	var state S
 	if err := json.Unmarshal(cp.State, &state); err != nil {
-		return zero, fmt.Errorf("%w: %v", ErrDeserializeState, err)
+		return zero, fmt.Errorf("%w: %w", ErrDeserializeState, err)
 	}
 
 	// Apply state override if configured
@@ -116,7 +117,7 @@ func (cg *CompiledGraph[S]) ResumeFrom(ctx Context, store checkpoint.Store, runI
 	// Load checkpoint at specified node
 	data, err := store.Load(runID, nodeID)
 	if err != nil {
-		if err == checkpoint.ErrNotFound {
+		if errors.Is(err, checkpoint.ErrNotFound) {
 			return zero, fmt.Errorf("%w: %s at node %s", ErrNoCheckpoints, runID, nodeID)
 		}
 		return zero, fmt.Errorf("load checkpoint: %w", err)
@@ -125,7 +126,7 @@ func (cg *CompiledGraph[S]) ResumeFrom(ctx Context, store checkpoint.Store, runI
 	// Unmarshal checkpoint
 	cp, err := checkpoint.Unmarshal(data)
 	if err != nil {
-		return zero, fmt.Errorf("%w: %v", ErrDeserializeState, err)
+		return zero, fmt.Errorf("%w: %w", ErrDeserializeState, err)
 	}
 
 	// Check version compatibility
@@ -137,7 +138,7 @@ func (cg *CompiledGraph[S]) ResumeFrom(ctx Context, store checkpoint.Store, runI
 	// Deserialize state
 	var state S
 	if err := json.Unmarshal(cp.State, &state); err != nil {
-		return zero, fmt.Errorf("%w: %v", ErrDeserializeState, err)
+		return zero, fmt.Errorf("%w: %w", ErrDeserializeState, err)
 	}
 
 	// Apply state override if configured
