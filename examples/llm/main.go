@@ -10,7 +10,7 @@ import (
 	"log"
 
 	"github.com/randalmurphal/flowgraph/pkg/flowgraph"
-	"github.com/randalmurphal/flowgraph/pkg/flowgraph/llm"
+	"github.com/randalmurphal/llmkit/claude"
 )
 
 // State holds the conversation data.
@@ -30,9 +30,9 @@ func generateAnswer(ctx flowgraph.Context, s State) (State, error) {
 	}
 
 	// Build completion request
-	resp, err := client.Complete(ctx, llm.CompletionRequest{
-		Messages: []llm.Message{
-			{Role: llm.RoleUser, Content: s.Question},
+	resp, err := client.Complete(ctx, claude.CompletionRequest{
+		Messages: []claude.Message{
+			{Role: claude.RoleUser, Content: s.Question},
 		},
 	})
 	if err != nil {
@@ -48,8 +48,8 @@ func generateAnswer(ctx flowgraph.Context, s State) (State, error) {
 
 func main() {
 	// Create a mock LLM client for demonstration
-	// In production, use llm.NewClaudeCLI(...) instead
-	mockClient := llm.NewMockClient("The answer to your question is 42.").
+	// In production, use claude.NewClaudeCLI(...) instead
+	mockClient := claude.NewMockClient("The answer to your question is 42.").
 		WithResponses(
 			"The answer to your question is 42.",
 			"I understand you're asking about the meaning of life.",
@@ -100,11 +100,11 @@ func main() {
 	fmt.Println("\n=== Production Configuration ===")
 	fmt.Println("Replace MockClient with ClaudeCLI:")
 	fmt.Print(`
-client := llm.NewClaudeCLI(
-    llm.WithModel("sonnet"),
-    llm.WithOutputFormat(llm.OutputFormatJSON),
-    llm.WithDangerouslySkipPermissions(),
-    llm.WithMaxBudgetUSD(1.0),
+client := claude.NewClaudeCLI(
+    claude.WithModel("sonnet"),
+    claude.WithOutputFormat(claude.OutputFormatJSON),
+    claude.WithDangerouslySkipPermissions(),
+    claude.WithMaxBudgetUSD(1.0),
 )
 
 ctx := flowgraph.NewContext(context.Background(), flowgraph.WithLLM(client))

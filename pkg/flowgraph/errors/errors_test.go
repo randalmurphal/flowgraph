@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/randalmurphal/flowgraph/pkg/flowgraph/model"
+	"github.com/randalmurphal/llmkit/model"
 )
 
 // discardLogger returns a logger that discards all output.

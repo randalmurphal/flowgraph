@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/randalmurphal/flowgraph/pkg/flowgraph/model"
+	"github.com/randalmurphal/llmkit/model"
 )
 
 // Handler coordinates error handling strategies.

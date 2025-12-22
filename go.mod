@@ -6,6 +6,7 @@ toolchain go1.24.11
 
 require (
 	github.com/google/uuid v1.6.0
+	github.com/randalmurphal/llmkit v1.0.0
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/otel v1.39.0
 	go.opentelemetry.io/otel/metric v1.39.0
@@ -15,6 +16,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.40.1
 )
+
+replace github.com/randalmurphal/llmkit => ../llmkit
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
