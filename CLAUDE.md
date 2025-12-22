@@ -15,7 +15,7 @@
 | `pkg/flowgraph/config/` | Type-safe config extraction | `Config`, `FromFile`, `FromYAML`, `FromJSON` |
 | `pkg/flowgraph/errors/` | Error handling strategies | `Category`, `RetryConfig`, `Handler` |
 | `pkg/flowgraph/expr/` | Expression evaluation | `Evaluator`, `Eval`, `BinaryOp` |
-| `pkg/flowgraph/llm/` | LLM client interface | `Client`, `ClaudeCLI`, `MockClient` |
+| `pkg/flowgraph/llm/` | LLM client interface + credentials | `Client`, `ClaudeCLI`, `Credentials`, `MockClient` |
 | `pkg/flowgraph/llm/tokens/` | Token counting, budget, model limits | `Counter`, `Budget`, `ModelLimits` |
 | `pkg/flowgraph/llm/truncate/` | Truncation strategies (FromEnd, FromMiddle, FromStart) | `Strategy`, `Truncator`, `Options` |
 | `pkg/flowgraph/llm/template/` | Prompt templates with Handlebars syntax | `Engine`, `Template`, `Render` |
@@ -60,6 +60,24 @@ result, err = compiled.Resume(ctx, store, "run-123")
 ```go
 client := llm.NewClaudeCLI()
 ctx := flowgraph.NewContext(context.Background(), flowgraph.WithLLM(client))
+```
+
+### LLM in Containers
+```go
+// For containers where credentials are mounted to a custom location
+client := llm.NewClaudeCLI(
+    llm.WithHomeDir("/home/worker"),        // Where ~/.claude is mounted
+    llm.WithDangerouslySkipPermissions(),   // Non-interactive mode
+)
+
+// Load and validate credentials
+creds, err := llm.LoadCredentialsFromDir("/home/worker/.claude")
+if err != nil {
+    log.Fatal(err)
+}
+if creds.IsExpiringSoon(10 * time.Minute) {
+    log.Warn("credentials expiring soon", "in", creds.ExpiresIn())
+}
 ```
 
 ### With Observability

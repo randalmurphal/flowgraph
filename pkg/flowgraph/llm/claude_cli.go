@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -68,6 +69,11 @@ type ClaudeCLI struct {
 	maxBudgetUSD  float64
 	fallbackModel string
 	maxTurns      int
+
+	// Credential/environment control (for containers)
+	homeDir   string            // Override HOME env var (for credential discovery)
+	configDir string            // Override ~/.claude directory path
+	extraEnv  map[string]string // Additional environment variables
 }
 
 // ClaudeOption configures ClaudeCLI.
@@ -205,6 +211,43 @@ func WithMaxTurns(n int) ClaudeOption {
 	return func(c *ClaudeCLI) { c.maxTurns = n }
 }
 
+// WithHomeDir sets the HOME environment variable for the CLI process.
+// This is useful in containers where credentials are mounted to a non-standard location.
+// The Claude CLI will look for credentials in $HOME/.claude/.credentials.json.
+func WithHomeDir(dir string) ClaudeOption {
+	return func(c *ClaudeCLI) { c.homeDir = dir }
+}
+
+// WithConfigDir sets the Claude config directory path.
+// If set, this overrides the default ~/.claude location.
+// Note: This sets CLAUDE_CONFIG_DIR environment variable if supported by the CLI.
+func WithConfigDir(dir string) ClaudeOption {
+	return func(c *ClaudeCLI) { c.configDir = dir }
+}
+
+// WithEnv adds additional environment variables to the CLI process.
+// These are merged with the parent environment and any other configured env vars.
+func WithEnv(env map[string]string) ClaudeOption {
+	return func(c *ClaudeCLI) {
+		if c.extraEnv == nil {
+			c.extraEnv = make(map[string]string)
+		}
+		for k, v := range env {
+			c.extraEnv[k] = v
+		}
+	}
+}
+
+// WithEnvVar adds a single environment variable to the CLI process.
+func WithEnvVar(key, value string) ClaudeOption {
+	return func(c *ClaudeCLI) {
+		if c.extraEnv == nil {
+			c.extraEnv = make(map[string]string)
+		}
+		c.extraEnv[key] = value
+	}
+}
+
 // CLIResponse represents the full JSON response from Claude CLI.
 type CLIResponse struct {
 	Type         string                   `json:"type"`
@@ -237,16 +280,54 @@ type CLIModelUsage struct {
 	CostUSD                  float64 `json:"costUSD"`
 }
 
+// setupCmd configures the command with working directory and environment variables.
+func (c *ClaudeCLI) setupCmd(cmd *exec.Cmd) {
+	if c.workdir != "" {
+		cmd.Dir = c.workdir
+	}
+
+	// Only set Env if we have custom environment variables to add.
+	// If Env is nil, the command inherits the parent process's environment.
+	if c.homeDir != "" || c.configDir != "" || len(c.extraEnv) > 0 {
+		// Start with parent environment
+		cmd.Env = os.Environ()
+
+		// Override HOME if specified (for credential discovery in containers)
+		if c.homeDir != "" {
+			cmd.Env = setEnvVar(cmd.Env, "HOME", c.homeDir)
+		}
+
+		// Set config directory if specified
+		if c.configDir != "" {
+			cmd.Env = setEnvVar(cmd.Env, "CLAUDE_CONFIG_DIR", c.configDir)
+		}
+
+		// Add any extra environment variables
+		for k, v := range c.extraEnv {
+			cmd.Env = setEnvVar(cmd.Env, k, v)
+		}
+	}
+}
+
+// setEnvVar updates or adds an environment variable in an env slice.
+func setEnvVar(env []string, key, value string) []string {
+	prefix := key + "="
+	for i, e := range env {
+		if strings.HasPrefix(e, prefix) {
+			env[i] = prefix + value
+			return env
+		}
+	}
+	return append(env, prefix+value)
+}
+
 // Complete implements Client.
 func (c *ClaudeCLI) Complete(ctx context.Context, req CompletionRequest) (*CompletionResponse, error) {
 	start := time.Now()
 
 	args := c.buildArgs(req)
 	cmd := exec.CommandContext(ctx, c.path, args...)
-
-	if c.workdir != "" {
-		cmd.Dir = c.workdir
-	}
+	c.setupCmd(cmd)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -274,10 +355,7 @@ func (c *ClaudeCLI) Stream(ctx context.Context, req CompletionRequest) (<-chan S
 	// Force stream-json output for streaming
 	args := c.buildArgsWithFormat(req, OutputFormatStreamJSON)
 	cmd := exec.CommandContext(ctx, c.path, args...)
-
-	if c.workdir != "" {
-		cmd.Dir = c.workdir
-	}
+	c.setupCmd(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

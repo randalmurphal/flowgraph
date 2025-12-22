@@ -550,3 +550,66 @@ func TestPermissionModeConstants(t *testing.T) {
 	assert.Equal(t, PermissionMode("acceptEdits"), PermissionModeAcceptEdits)
 	assert.Equal(t, PermissionMode("bypassPermissions"), PermissionModeBypassPermissions)
 }
+
+func TestSetEnvVar(t *testing.T) {
+	t.Run("adds new variable", func(t *testing.T) {
+		env := []string{"PATH=/usr/bin", "HOME=/home/user"}
+		result := setEnvVar(env, "NEW_VAR", "value")
+
+		assert.Len(t, result, 3)
+		assert.Contains(t, result, "NEW_VAR=value")
+	})
+
+	t.Run("updates existing variable", func(t *testing.T) {
+		env := []string{"PATH=/usr/bin", "HOME=/home/user"}
+		result := setEnvVar(env, "HOME", "/new/home")
+
+		assert.Len(t, result, 2)
+		assert.Contains(t, result, "HOME=/new/home")
+		assert.NotContains(t, result, "HOME=/home/user")
+	})
+
+	t.Run("handles empty environment", func(t *testing.T) {
+		result := setEnvVar(nil, "KEY", "value")
+		assert.Equal(t, []string{"KEY=value"}, result)
+	})
+}
+
+func TestWithHomeDir(t *testing.T) {
+	client := NewClaudeCLI(WithHomeDir("/container/home"))
+	assert.Equal(t, "/container/home", client.homeDir)
+}
+
+func TestWithConfigDir(t *testing.T) {
+	client := NewClaudeCLI(WithConfigDir("/custom/.claude"))
+	assert.Equal(t, "/custom/.claude", client.configDir)
+}
+
+func TestWithEnv(t *testing.T) {
+	t.Run("adds environment variables", func(t *testing.T) {
+		client := NewClaudeCLI(WithEnv(map[string]string{
+			"FOO": "bar",
+			"BAZ": "qux",
+		}))
+		assert.Equal(t, "bar", client.extraEnv["FOO"])
+		assert.Equal(t, "qux", client.extraEnv["BAZ"])
+	})
+
+	t.Run("merges multiple calls", func(t *testing.T) {
+		client := NewClaudeCLI(
+			WithEnv(map[string]string{"FOO": "bar"}),
+			WithEnv(map[string]string{"BAZ": "qux"}),
+		)
+		assert.Equal(t, "bar", client.extraEnv["FOO"])
+		assert.Equal(t, "qux", client.extraEnv["BAZ"])
+	})
+}
+
+func TestWithEnvVar(t *testing.T) {
+	client := NewClaudeCLI(
+		WithEnvVar("KEY1", "value1"),
+		WithEnvVar("KEY2", "value2"),
+	)
+	assert.Equal(t, "value1", client.extraEnv["KEY1"])
+	assert.Equal(t, "value2", client.extraEnv["KEY2"])
+}
