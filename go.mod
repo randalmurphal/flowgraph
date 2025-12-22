@@ -17,8 +17,6 @@ require (
 	modernc.org/sqlite v1.40.1
 )
 
-replace github.com/randalmurphal/llmkit => ../llmkit
-
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
