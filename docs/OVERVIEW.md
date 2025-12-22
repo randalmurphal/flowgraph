@@ -262,6 +262,32 @@ type Client interface {
 - `ClaudeCLI` - Shells out to `claude` binary (full token/cost tracking)
 - `MockClient` - Testing with configurable responses
 
+### Container Usage
+
+For containerized workflows, credentials can be mounted from the host:
+
+```go
+// Configure client for container environment
+client := llm.NewClaudeCLI(
+    llm.WithHomeDir("/home/worker"),        // Override HOME for credential discovery
+    llm.WithDangerouslySkipPermissions(),   // Non-interactive mode
+)
+
+// Validate credentials before use
+creds, err := llm.LoadCredentialsFromDir("/home/worker/.claude")
+if err != nil {
+    return fmt.Errorf("credentials not available: %w", err)
+}
+if creds.IsExpired() {
+    return errors.New("credentials expired - refresh required on host")
+}
+```
+
+**Environment setup** (container orchestrator):
+- Mount `~/.claude` → `/home/worker/.claude` (read-only)
+- Set `HOME=/home/worker` for credential discovery
+- Claude CLI handles token refresh automatically when called
+
 **Request structure**:
 ```go
 type CompletionRequest struct {
