@@ -118,12 +118,49 @@ See `examples/` for complete working examples.
 
 ---
 
+## Parallel Execution (Fork/Join)
+
+Flowgraph supports parallel branch execution with goroutine orchestration:
+
+```go
+// State must implement ParallelState for custom clone/merge
+type ParallelState[S any] interface {
+    CloneForBranch(branchID string) S
+    Merge(branchStates map[string]S) S
+}
+
+// BranchHook provides lifecycle callbacks for parallel branches
+type BranchHook[S any] interface {
+    OnFork(ctx Context, branchID string, state S) (S, error)
+    OnJoin(ctx Context, branchStates map[string]S) error
+    OnBranchError(ctx Context, branchID string, state S, err error)
+}
+
+// Configure parallel execution
+graph := flowgraph.NewGraph[State]().
+    SetBranchHook(myHook).
+    SetForkJoinConfig(flowgraph.ForkJoinConfig{
+        MaxConcurrency: 4,      // 0 = unlimited
+        FailFast:       false,  // Wait for all branches
+        MergeTimeout:   0,      // 0 = no timeout
+    })
+```
+
+**Checkpoint branch fields** (for resuming mid-fork):
+```go
+checkpoint.New(runID, nodeID, seq, state, nextNode).
+    WithBranch(branchID, forkNodeID)  // Track branch context
+```
+
+---
+
 ## Key Features
 
 - **Type-safe graphs** with Go generics
 - **Conditional branching** via router functions
+- **Parallel execution** via fork/join with goroutines
 - **Loops** with max iterations protection
-- **Crash recovery** via checkpointing
+- **Crash recovery** via checkpointing (including branch state)
 - **LLM integration** with Claude CLI (token/cost tracking)
 - **Observability** via slog + OpenTelemetry
 

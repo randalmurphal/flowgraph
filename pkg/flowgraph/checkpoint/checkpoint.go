@@ -26,6 +26,10 @@ type Checkpoint struct {
 	// Execution context
 	Attempt    int    `json:"attempt"`
 	PrevNodeID string `json:"prev_node_id,omitempty"`
+
+	// Parallel branch context (for fork/join execution)
+	BranchID   string `json:"branch_id,omitempty"`
+	ForkNodeID string `json:"fork_node_id,omitempty"`
 }
 
 // Marshal serializes a checkpoint to JSON.
@@ -66,5 +70,12 @@ func (c *Checkpoint) WithAttempt(attempt int) *Checkpoint {
 // WithPrevNode sets the previous node ID for debugging.
 func (c *Checkpoint) WithPrevNode(prevNodeID string) *Checkpoint {
 	c.PrevNodeID = prevNodeID
+	return c
+}
+
+// WithBranch sets the branch context for parallel execution.
+func (c *Checkpoint) WithBranch(branchID, forkNodeID string) *Checkpoint {
+	c.BranchID = branchID
+	c.ForkNodeID = forkNodeID
 	return c
 }
