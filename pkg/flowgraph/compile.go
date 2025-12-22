@@ -219,6 +219,9 @@ func (g *Graph[S]) buildCompiledGraph() *CompiledGraph[S] {
 		isConditional[from] = true
 	}
 
+	// Detect fork/join nodes
+	forkNodes, joinNodes := detectForkJoinNodes(edges, predecessors, isConditional)
+
 	return &CompiledGraph[S]{
 		nodes:            nodes,
 		edges:            edges,
@@ -227,5 +230,141 @@ func (g *Graph[S]) buildCompiledGraph() *CompiledGraph[S] {
 		successors:       successors,
 		predecessors:     predecessors,
 		isConditional:    isConditional,
+		branchHook:       g.branchHook,
+		forkJoinConfig:   g.forkJoinConfig,
+		forkNodes:        forkNodes,
+		joinNodes:        joinNodes,
 	}
+}
+
+// detectForkJoinNodes identifies fork and join nodes in the graph.
+// A fork node has multiple outgoing edges (and is not conditional).
+// A join node is found using a simple heuristic: the first node where all
+// branches from a fork converge (post-dominator).
+//
+// This is a simplified algorithm that works for basic fork/join patterns.
+// More complex DAGs may require additional validation.
+func detectForkJoinNodes(edges map[string][]string, predecessors map[string][]string, isConditional map[string]bool) (map[string]*ForkNode, map[string]*JoinNode) {
+	forkNodes := make(map[string]*ForkNode)
+	joinNodes := make(map[string]*JoinNode)
+
+	// Find fork nodes: nodes with multiple outgoing non-conditional edges
+	for from, targets := range edges {
+		if len(targets) > 1 && !isConditional[from] {
+			// This is a fork node
+			fork := &ForkNode{
+				NodeID:   from,
+				Branches: make([]string, len(targets)),
+			}
+			copy(fork.Branches, targets)
+
+			// Find the join node using post-dominator analysis
+			joinNodeID := findJoinNode(from, targets, edges, predecessors)
+			fork.JoinNodeID = joinNodeID
+
+			forkNodes[from] = fork
+
+			// Create the join node entry
+			if joinNodeID != "" && joinNodeID != END {
+				joinNodes[joinNodeID] = &JoinNode{
+					NodeID:           joinNodeID,
+					ForkNodeID:       from,
+					ExpectedBranches: fork.Branches,
+				}
+			}
+		}
+	}
+
+	return forkNodes, joinNodes
+}
+
+// findJoinNode finds the join point for a fork using simplified post-dominator analysis.
+// It finds the first node that all branches must pass through to reach END.
+func findJoinNode(forkNode string, branches []string, edges map[string][]string, predecessors map[string][]string) string {
+	if len(branches) == 0 {
+		return ""
+	}
+
+	// For each branch, compute all nodes reachable from it
+	branchReachable := make([]map[string]bool, len(branches))
+	for i, branch := range branches {
+		branchReachable[i] = computeReachable(branch, edges)
+	}
+
+	// Find nodes reachable from ALL branches (intersection)
+	// Start with the first branch's reachable set
+	common := make(map[string]bool)
+	for node := range branchReachable[0] {
+		common[node] = true
+	}
+
+	// Intersect with other branches
+	for i := 1; i < len(branches); i++ {
+		for node := range common {
+			if !branchReachable[i][node] {
+				delete(common, node)
+			}
+		}
+	}
+
+	// Find the first common node (closest to branches)
+	// by finding the one with the shortest path from any branch
+	if len(common) == 0 {
+		return ""
+	}
+
+	// Use BFS from any branch to find the closest common node
+	return findClosestNode(branches[0], common, edges)
+}
+
+// computeReachable returns all nodes reachable from the given start node.
+func computeReachable(start string, edges map[string][]string) map[string]bool {
+	reachable := make(map[string]bool)
+	queue := []string{start}
+	reachable[start] = true
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		for _, next := range edges[current] {
+			if next != END && !reachable[next] {
+				reachable[next] = true
+				queue = append(queue, next)
+			}
+		}
+	}
+
+	return reachable
+}
+
+// findClosestNode finds the closest node in targets reachable from start using BFS.
+func findClosestNode(start string, targets map[string]bool, edges map[string][]string) string {
+	if targets[start] {
+		return start
+	}
+
+	visited := make(map[string]bool)
+	queue := []string{start}
+	visited[start] = true
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		for _, next := range edges[current] {
+			if next == END {
+				continue
+			}
+			if targets[next] {
+				return next
+			}
+			if !visited[next] {
+				visited[next] = true
+				queue = append(queue, next)
+			}
+		}
+	}
+
+	return ""
 }

@@ -18,6 +18,12 @@ type CompiledGraph[S any] struct {
 	successors    map[string][]string
 	predecessors  map[string][]string
 	isConditional map[string]bool
+
+	// Parallel execution support
+	branchHook     BranchHook[S]
+	forkJoinConfig ForkJoinConfig
+	forkNodes      map[string]*ForkNode // nodeID -> fork info (nodes with multiple outgoing edges)
+	joinNodes      map[string]*JoinNode // nodeID -> join info (nodes with multiple incoming from same fork)
 }
 
 // EntryPoint returns the entry node ID.
@@ -81,4 +87,53 @@ func (cg *CompiledGraph[S]) getRouter(id string) (RouterFunc[S], bool) {
 // Used internally by the executor.
 func (cg *CompiledGraph[S]) getEdges(id string) []string {
 	return cg.edges[id]
+}
+
+// IsForkNode returns true if the node is a detected fork point
+// (has multiple outgoing edges that require parallel execution).
+func (cg *CompiledGraph[S]) IsForkNode(id string) bool {
+	_, exists := cg.forkNodes[id]
+	return exists
+}
+
+// GetForkNode returns the fork information for a node, or nil if not a fork.
+func (cg *CompiledGraph[S]) GetForkNode(id string) *ForkNode {
+	return cg.forkNodes[id]
+}
+
+// IsJoinNode returns true if the node is a detected join point
+// (where parallel branches converge).
+func (cg *CompiledGraph[S]) IsJoinNode(id string) bool {
+	_, exists := cg.joinNodes[id]
+	return exists
+}
+
+// GetJoinNode returns the join information for a node, or nil if not a join.
+func (cg *CompiledGraph[S]) GetJoinNode(id string) *JoinNode {
+	return cg.joinNodes[id]
+}
+
+// ForkNodes returns all fork nodes in the graph.
+// Returns an empty slice if there are no fork nodes.
+func (cg *CompiledGraph[S]) ForkNodes() []*ForkNode {
+	result := make([]*ForkNode, 0, len(cg.forkNodes))
+	for _, fn := range cg.forkNodes {
+		result = append(result, fn)
+	}
+	return result
+}
+
+// HasParallelExecution returns true if the graph contains any fork/join structures.
+func (cg *CompiledGraph[S]) HasParallelExecution() bool {
+	return len(cg.forkNodes) > 0
+}
+
+// getBranchHook returns the branch hook, or nil if not set.
+func (cg *CompiledGraph[S]) getBranchHook() BranchHook[S] {
+	return cg.branchHook
+}
+
+// getForkJoinConfig returns the fork/join configuration.
+func (cg *CompiledGraph[S]) getForkJoinConfig() ForkJoinConfig {
+	return cg.forkJoinConfig
 }

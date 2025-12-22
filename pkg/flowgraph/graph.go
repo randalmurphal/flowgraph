@@ -24,12 +24,23 @@ import (
 //	    SetEntry("fetch")
 //
 //	compiled, err := graph.Compile()
+//
+// For parallel execution (fork/join), add multiple edges from a single node:
+//
+//	graph.AddEdge("dispatch", "workerA").
+//	    AddEdge("dispatch", "workerB").
+//	    AddEdge("workerA", "collect").
+//	    AddEdge("workerB", "collect")
+//
+// The compiler will detect "dispatch" as a fork node and "collect" as the join.
 type Graph[S any] struct {
 	mu               sync.RWMutex
 	nodes            map[string]NodeFunc[S]
 	edges            map[string][]string
 	conditionalEdges map[string]RouterFunc[S]
 	entryPoint       string
+	branchHook       BranchHook[S]
+	forkJoinConfig   ForkJoinConfig
 }
 
 // NewGraph creates a new graph builder for state type S.
@@ -127,5 +138,49 @@ func (g *Graph[S]) SetEntry(id string) *Graph[S] {
 	defer g.mu.Unlock()
 
 	g.entryPoint = id
+	return g
+}
+
+// SetBranchHook sets the lifecycle hook for parallel branch execution.
+// The hook is called during fork/join operations to allow custom setup,
+// validation, and cleanup.
+//
+// This is optional - if not set, the executor uses sensible defaults:
+//   - OnFork: state is cloned using ParallelState.Clone or JSON fallback
+//   - OnJoin: branch states are merged using ParallelState.Merge
+//   - OnBranchError: error is logged, no additional cleanup
+//
+// Example use case (git worktrees):
+//
+//	hook := &WorktreeBranchHook{Manager: worktreeManager}
+//	graph.SetBranchHook(hook)
+func (g *Graph[S]) SetBranchHook(hook BranchHook[S]) *Graph[S] {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	g.branchHook = hook
+	return g
+}
+
+// SetForkJoinConfig sets the configuration for parallel execution.
+// This controls concurrency limits, failure handling, and timeouts.
+//
+// This is optional - if not set, defaults are used:
+//   - MaxConcurrency: 0 (unlimited)
+//   - FailFast: false (wait for all branches)
+//   - MergeTimeout: 0 (no timeout)
+//
+// Example:
+//
+//	graph.SetForkJoinConfig(flowgraph.ForkJoinConfig{
+//	    MaxConcurrency: 4,      // Limit to 4 concurrent branches
+//	    FailFast:       true,   // Cancel others on first failure
+//	    MergeTimeout:   time.Minute * 5,
+//	})
+func (g *Graph[S]) SetForkJoinConfig(cfg ForkJoinConfig) *Graph[S] {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	g.forkJoinConfig = cfg
 	return g
 }

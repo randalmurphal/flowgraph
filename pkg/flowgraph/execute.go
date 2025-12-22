@@ -142,6 +142,31 @@ func (cg *CompiledGraph[S]) runFromWithObservability(tracingCtx context.Context,
 		default:
 		}
 
+		// Check if this is a fork node - handle parallel execution
+		if fork := cg.GetForkNode(current); fork != nil {
+			// Execute the fork node itself first
+			var nodeErr error
+			state, nodeErr = cg.executeNode(fgCtx, current, state)
+			if nodeErr != nil {
+				return state, nodeCount, nodeErr
+			}
+			nodeCount++
+
+			// Now execute branches in parallel
+			var mergedState S
+			var joinNode string
+			var forkErr error
+			mergedState, joinNode, forkErr = cg.executeForkJoin(fgCtx, fork, state, cfg)
+			if forkErr != nil {
+				return state, nodeCount, forkErr
+			}
+
+			state = mergedState
+			prevNode = current
+			current = joinNode
+			continue
+		}
+
 		// Log node start
 		observability.LogNodeStart(cfg.logger, current)
 
