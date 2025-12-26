@@ -1,6 +1,6 @@
 # flowgraph Implementation Progress
 
-**Last Updated**: 2025-12-19
+**Last Updated**: 2025-12-26
 
 ---
 
@@ -16,6 +16,7 @@
 | Phase 4: LLM Clients | ✅ Complete | 2025-12-19 | 2025-12-19 | 74.7% coverage (binary-dependent) |
 | Phase 5: Observability | ✅ Complete | 2025-12-19 | 2025-12-19 | 90.6% coverage |
 | Phase 6: Polish | ✅ Complete | 2025-12-19 | 2025-12-19 | Examples, docs, benchmarks done |
+| Phase 7: Temporal Patterns | ✅ Complete | 2025-12-21 | 2025-12-26 | Signal, Query, Saga, Event packages |
 
 ---
 
@@ -294,6 +295,88 @@ pkg/flowgraph/observability/
 
 ---
 
+## Phase 7: Temporal Patterns ✅ COMPLETE
+
+**Completed**: 2025-12-26
+**Dependencies**: Phases 1-6 ✅
+
+### Files Created
+
+```
+pkg/flowgraph/signal/
+├── signal.go       # Signal type and status constants
+├── store.go        # Store interface with MemoryStore implementation
+├── registry.go     # SignalHandler registry
+├── dispatcher.go   # Signal dispatching and processing
+
+pkg/flowgraph/query/
+├── query.go        # Query handler types and State struct
+├── registry.go     # QueryHandler registry with built-in queries
+├── executor.go     # Query execution engine
+├── builtins.go     # Built-in queries (status, progress, variables, etc.)
+
+pkg/flowgraph/saga/
+├── saga.go         # Step, Definition types
+├── execution.go    # Execution tracking with compensation
+├── store.go        # Store interface with MemoryStore implementation
+├── orchestrator.go # Saga orchestration and execution
+
+pkg/flowgraph/event/
+├── event.go        # BaseEvent with correlation, versioning
+├── schema.go       # SchemaRegistry with validation
+├── router.go       # Event routing with middleware
+├── bus.go          # Pub/sub with subscriptions
+├── aggregator.go   # Fan-in aggregation strategies
+├── dlq.go          # Dead Letter Queue with retry
+├── poison.go       # Poison pill detection
+
+pkg/flowgraph/registry/
+├── registry.go     # Generic thread-safe Registry[K,V]
+```
+
+### What Works
+
+**Signals** (Fire-and-Forget):
+- ✅ Signal type with Name, TargetID, Payload, Status, Timestamps
+- ✅ SignalHandler function type for handling signals
+- ✅ Registry for registering handlers by signal name
+- ✅ MemoryStore for signal persistence
+- ✅ Dispatcher for sending and processing signals
+- ✅ Status tracking: Pending, Processed, Failed
+
+**Queries** (Read-Only Inspection):
+- ✅ QueryHandler function type returning any result
+- ✅ State struct with TargetID, Status, Progress, Variables, CurrentNode
+- ✅ Registry with built-in and custom query registration
+- ✅ Executor for query execution with state loading
+- ✅ Built-in queries: status, progress, current_node, variables, pending_task, state
+
+**Sagas** (Distributed Transactions):
+- ✅ Step with Handler and Compensation functions
+- ✅ Definition with name and step sequence
+- ✅ Execution tracking with CurrentStep, Status, Input/Output, Error
+- ✅ StepExecution for per-step tracking
+- ✅ MemoryStore for saga persistence
+- ✅ Orchestrator with Register, Start, Get, Compensate, List
+- ✅ Automatic compensation on step failure (LIFO order)
+- ✅ Manual compensation trigger with reason
+- ✅ Status progression: Pending → Running → Completed/Failed/Compensating → Compensated
+
+**Event System**:
+- ✅ BaseEvent[T] with CorrelationID, CausationID, TenantID, Version
+- ✅ SchemaRegistry with version compatibility checks
+- ✅ Router with middleware support (logging, recovery, metrics)
+- ✅ Bus for pub/sub with pattern matching subscriptions
+- ✅ Aggregator for fan-in (correlation, count, time-window based)
+- ✅ DLQ with retry, exponential backoff
+- ✅ Poison pill detection
+
+**Generic Registry**:
+- ✅ Thread-safe Registry[K, V] with comparable keys
+- ✅ Register, Get, GetOrCreate, Delete, Range, Clear, Size
+
+---
+
 ## Next Actions
 
 1. ✅ ~~Phase 1 implementation~~ DONE
@@ -301,7 +384,8 @@ pkg/flowgraph/observability/
 3. ✅ ~~Phase 4 (LLM Clients)~~ DONE
 4. ✅ ~~Phase 5 (Observability)~~ DONE
 5. ✅ ~~Phase 6 (Polish)~~ DONE
-6. **All phases complete!** Library is production-ready
+6. ✅ ~~Phase 7 (Temporal Patterns)~~ DONE
+7. **All phases complete!** Library is production-ready with Temporal-inspired patterns
 
 ---
 
@@ -356,3 +440,13 @@ pkg/flowgraph/observability/
 - Ran full quality checks: tests pass, go vet clean, gofmt clean
 - Updated progress tracking documentation
 - **All phases complete - library is production-ready**
+
+### Session 6 (2025-12-21 - 2025-12-26): Phase 7 - Temporal Patterns
+
+- Implemented signal package for fire-and-forget workflow signaling
+- Implemented query package for read-only workflow state inspection
+- Implemented saga package for distributed transaction orchestration
+- Implemented event package with router, bus, aggregator, DLQ, poison pill detection
+- Implemented generic registry package for thread-safe registries
+- Added comprehensive CLAUDE.md documentation for all new packages
+- All tests pass, library integrated into task-keeper
