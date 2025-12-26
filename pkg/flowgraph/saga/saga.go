@@ -173,22 +173,46 @@ func (e *Execution) Clone() *Execution {
 // Orchestrator manages saga executions.
 type Orchestrator struct {
 	sagas      map[string]*Definition
-	executions map[string]*Execution
+	executions map[string]*Execution // Used when store is nil (in-memory mode)
+	store      Store                 // Optional persistent store
 	mu         sync.RWMutex
 	logger     *slog.Logger
 }
 
+// OrchestratorOption configures an Orchestrator.
+type OrchestratorOption func(*Orchestrator)
+
+// WithStore configures a persistent store for saga executions.
+// When set, executions are persisted after each state change.
+// If not set, executions are stored in-memory only.
+func WithStore(store Store) OrchestratorOption {
+	return func(o *Orchestrator) {
+		o.store = store
+	}
+}
+
+// WithLogger configures the logger for the orchestrator.
+func WithLogger(logger *slog.Logger) OrchestratorOption {
+	return func(o *Orchestrator) {
+		o.logger = logger
+	}
+}
+
 // NewOrchestrator creates a new saga orchestrator.
-func NewOrchestrator() *Orchestrator {
-	return &Orchestrator{
+func NewOrchestrator(opts ...OrchestratorOption) *Orchestrator {
+	o := &Orchestrator{
 		sagas:      make(map[string]*Definition),
 		executions: make(map[string]*Execution),
 		logger:     slog.Default(),
 	}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
 }
 
-// WithLogger sets the logger for the orchestrator.
-func (o *Orchestrator) WithLogger(logger *slog.Logger) *Orchestrator {
+// SetLogger sets the logger for the orchestrator (deprecated: use WithLogger option).
+func (o *Orchestrator) SetLogger(logger *slog.Logger) *Orchestrator {
 	o.logger = logger
 	return o
 }
@@ -244,9 +268,16 @@ func (o *Orchestrator) Start(ctx context.Context, sagaName string, input any) (*
 		}
 	}
 
-	o.mu.Lock()
-	o.executions[execution.ID] = execution
-	o.mu.Unlock()
+	// Persist to store or in-memory cache
+	if o.store != nil {
+		if err := o.store.Create(ctx, execution); err != nil {
+			return nil, fmt.Errorf("failed to persist execution: %w", err)
+		}
+	} else {
+		o.mu.Lock()
+		o.executions[execution.ID] = execution
+		o.mu.Unlock()
+	}
 
 	// Execute saga steps asynchronously
 	go o.execute(ctx, saga, execution)
@@ -278,6 +309,9 @@ func (o *Orchestrator) execute(ctx context.Context, saga *Definition, execution 
 		stepExec.Input = currentOutput
 		execution.mu.Unlock()
 
+		// Persist step start
+		o.persistExecution(ctx, execution)
+
 		// Execute step with timeout
 		var output any
 		output, stepErr = o.executeStep(ctx, saga, step, currentOutput)
@@ -307,6 +341,9 @@ func (o *Orchestrator) execute(ctx context.Context, saga *Definition, execution 
 		}
 		execution.mu.Unlock()
 
+		// Persist step completion
+		o.persistExecution(ctx, execution)
+
 		if stepErr != nil {
 			o.logger.Error("saga step failed",
 				"saga_id", execution.ID,
@@ -330,6 +367,9 @@ func (o *Orchestrator) execute(ctx context.Context, saga *Definition, execution 
 	execution.Output = currentOutput
 	execution.FinishedAt = time.Now()
 	execution.mu.Unlock()
+
+	// Persist final state
+	o.persistExecution(ctx, execution)
 
 	o.logger.Info("saga completed successfully",
 		"saga_id", execution.ID,
@@ -362,6 +402,20 @@ func (o *Orchestrator) executeStep(
 	return step.Handler(stepCtx, input)
 }
 
+// persistExecution saves the execution to the store if configured.
+func (o *Orchestrator) persistExecution(ctx context.Context, execution *Execution) {
+	if o.store == nil {
+		return
+	}
+
+	if err := o.store.Update(ctx, execution); err != nil {
+		o.logger.Error("failed to persist saga execution",
+			"saga_id", execution.ID,
+			"error", err,
+		)
+	}
+}
+
 // compensateFrom runs compensation handlers in reverse order.
 func (o *Orchestrator) compensateFrom(
 	ctx context.Context,
@@ -374,6 +428,9 @@ func (o *Orchestrator) compensateFrom(
 	execution.Status = StatusCompensating
 	execution.Error = originalErr.Error()
 	execution.mu.Unlock()
+
+	// Persist compensation start
+	o.persistExecution(ctx, execution)
 
 	o.logger.Info("starting saga compensation",
 		"saga_id", execution.ID,
@@ -424,6 +481,9 @@ func (o *Orchestrator) compensateFrom(
 	execution.FinishedAt = now
 	execution.mu.Unlock()
 
+	// Persist final compensation state
+	o.persistExecution(ctx, execution)
+
 	o.logger.Info("saga compensation completed",
 		"saga_id", execution.ID,
 		"saga_name", saga.Name,
@@ -437,11 +497,11 @@ func (o *Orchestrator) compensateFrom(
 
 // Compensate triggers compensation for a running or completed saga.
 func (o *Orchestrator) Compensate(ctx context.Context, executionID string, reason string) error {
-	o.mu.RLock()
-	execution, exists := o.executions[executionID]
-	o.mu.RUnlock()
-
-	if !exists {
+	execution, err := o.getExecution(ctx, executionID)
+	if err != nil {
+		return err
+	}
+	if execution == nil {
 		return fmt.Errorf("execution %q not found", executionID)
 	}
 
@@ -467,57 +527,109 @@ func (o *Orchestrator) Compensate(ctx context.Context, executionID string, reaso
 	return nil
 }
 
-// Get returns an execution by ID.
-func (o *Orchestrator) Get(executionID string) *Execution {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
-
-	exec, exists := o.executions[executionID]
-	if !exists {
-		return nil
+// getExecution retrieves an execution from store or in-memory cache.
+func (o *Orchestrator) getExecution(ctx context.Context, executionID string) (*Execution, error) {
+	if o.store != nil {
+		return o.store.Get(ctx, executionID)
 	}
 
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	exec, exists := o.executions[executionID]
+	if !exists {
+		return nil, nil
+	}
+	return exec, nil
+}
+
+// Get returns an execution by ID.
+func (o *Orchestrator) Get(executionID string) *Execution {
+	exec, err := o.getExecution(context.Background(), executionID)
+	if err != nil || exec == nil {
+		return nil
+	}
 	return exec.Clone()
+}
+
+// GetContext returns an execution by ID with context support.
+func (o *Orchestrator) GetContext(ctx context.Context, executionID string) (*Execution, error) {
+	exec, err := o.getExecution(ctx, executionID)
+	if err != nil {
+		return nil, err
+	}
+	if exec == nil {
+		return nil, ErrExecutionNotFound
+	}
+	return exec.Clone(), nil
 }
 
 // List returns all executions.
 func (o *Orchestrator) List() []*Execution {
+	result, _ := o.ListContext(context.Background(), nil)
+	return result
+}
+
+// ListContext returns executions matching the filter with context support.
+func (o *Orchestrator) ListContext(ctx context.Context, filter *ListFilter) ([]*Execution, error) {
+	if o.store != nil {
+		return o.store.List(ctx, filter)
+	}
+
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 
 	result := make([]*Execution, 0, len(o.executions))
 	for _, exec := range o.executions {
+		// Apply filters
+		if filter != nil {
+			if filter.SagaName != "" && exec.SagaName != filter.SagaName {
+				continue
+			}
+			exec.mu.Lock()
+			matches := filter.Status == "" || exec.Status == filter.Status
+			exec.mu.Unlock()
+			if !matches {
+				continue
+			}
+		}
 		result = append(result, exec.Clone())
 	}
-	return result
+
+	// Apply pagination
+	if filter != nil {
+		if filter.Offset > 0 {
+			if filter.Offset >= len(result) {
+				return []*Execution{}, nil
+			}
+			result = result[filter.Offset:]
+		}
+		if filter.Limit > 0 && filter.Limit < len(result) {
+			result = result[:filter.Limit]
+		}
+	}
+
+	return result, nil
 }
 
 // ListByStatus returns executions with the given status.
 func (o *Orchestrator) ListByStatus(status Status) []*Execution {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
-
-	var result []*Execution
-	for _, exec := range o.executions {
-		exec.mu.Lock()
-		matches := exec.Status == status
-		exec.mu.Unlock()
-
-		if matches {
-			result = append(result, exec.Clone())
-		}
-	}
+	result, _ := o.ListContext(context.Background(), &ListFilter{Status: status})
 	return result
 }
 
 // Remove removes an execution from tracking.
 // Only completed, compensated, or failed sagas can be removed.
 func (o *Orchestrator) Remove(executionID string) error {
-	o.mu.Lock()
-	defer o.mu.Unlock()
+	return o.RemoveContext(context.Background(), executionID)
+}
 
-	exec, exists := o.executions[executionID]
-	if !exists {
+// RemoveContext removes an execution from tracking with context support.
+func (o *Orchestrator) RemoveContext(ctx context.Context, executionID string) error {
+	exec, err := o.getExecution(ctx, executionID)
+	if err != nil {
+		return err
+	}
+	if exec == nil {
 		return fmt.Errorf("execution %q not found", executionID)
 	}
 
@@ -529,6 +641,12 @@ func (o *Orchestrator) Remove(executionID string) error {
 		return errors.New("cannot remove running or compensating saga")
 	}
 
+	if o.store != nil {
+		return o.store.Delete(ctx, executionID)
+	}
+
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	delete(o.executions, executionID)
 	return nil
 }

@@ -211,7 +211,13 @@ progress, _ := executor.Execute(ctx, "run-123", query.QueryProgress, nil)
 ```go
 import "github.com/randalmurphal/flowgraph/pkg/flowgraph/saga"
 
+// In-memory orchestrator (default)
 orch := saga.NewOrchestrator()
+
+// Or with persistent store for durability
+store := saga.NewMemoryStore()  // Or implement saga.Store for PostgreSQL, etc.
+orch := saga.NewOrchestrator(saga.WithStore(store), saga.WithLogger(logger))
+
 orch.Register(&saga.Definition{
     Name: "order-saga",
     Steps: []saga.Step{
@@ -230,6 +236,20 @@ fmt.Println(exec.Status) // completed, compensated, or failed
 
 // Manual compensation
 orch.Compensate(ctx, exec.ID, "manual rollback requested")
+
+// List executions with filter
+execs, _ := orch.ListContext(ctx, &saga.ListFilter{Status: saga.StatusRunning})
+```
+
+**Saga Store Interface** (for custom persistence):
+```go
+type Store interface {
+    Create(ctx context.Context, execution *Execution) error
+    Update(ctx context.Context, execution *Execution) error
+    Get(ctx context.Context, executionID string) (*Execution, error)
+    List(ctx context.Context, filter *ListFilter) ([]*Execution, error)
+    Delete(ctx context.Context, executionID string) error
+}
 ```
 
 ---
