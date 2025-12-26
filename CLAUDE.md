@@ -23,7 +23,10 @@
 | `pkg/flowgraph/llm/parser/` | Extract JSON, YAML, code blocks from responses | `Parser`, `Extract`, `CodeBlock` |
 | `pkg/flowgraph/model/` | Model selection & cost | `ModelName`, `Selector`, `EscalationChain`, `CostTracker` |
 | `pkg/flowgraph/observability/` | Logging/metrics/tracing | `MetricsRecorder`, `SpanManager` |
+| `pkg/flowgraph/query/` | Read-only workflow inspection (Temporal-inspired) | `Handler`, `Registry`, `Executor`, `State` |
 | `pkg/flowgraph/registry/` | Generic thread-safe registry | `Registry[K,V]`, `GetOrCreate`, `Range` |
+| `pkg/flowgraph/saga/` | Distributed transactions with compensation | `Step`, `Definition`, `Execution`, `Orchestrator` |
+| `pkg/flowgraph/signal/` | Fire-and-forget workflow signals (Temporal-inspired) | `Signal`, `Registry`, `Store`, `Dispatcher` |
 | `pkg/flowgraph/template/` | Variable expansion | `Expander`, `Expand`, `ExpandAll`, `ExpandMap` |
 
 ---
@@ -157,6 +160,77 @@ dlqWithDetection := event.NewDLQWithPoisonPillDetection(dlq, detector)
 - Fan-out pub/sub with deduplication
 - Fan-in aggregation (correlation, count, time-window based)
 - DLQ/PLQ with retry, exponential backoff, poison pill detection
+
+---
+
+## Temporal-Inspired Patterns
+
+### Signals (Fire-and-Forget)
+```go
+import "github.com/randalmurphal/flowgraph/pkg/flowgraph/signal"
+
+// Registry for signal handlers
+registry := signal.NewRegistry()
+registry.Register("cancel", func(ctx context.Context, targetID string, sig *signal.Signal) error {
+    // Handle cancel signal
+    return nil
+})
+
+// Store + Dispatcher for signal delivery
+store := signal.NewMemoryStore()
+dispatcher := signal.NewDispatcher(registry, store)
+
+// Send signal to a running workflow
+sig := &signal.Signal{Name: "cancel", TargetID: "run-123", Payload: map[string]any{"reason": "user request"}}
+dispatcher.Send(ctx, sig)
+
+// Process pending signals
+dispatcher.Process(ctx, "run-123")
+```
+
+### Queries (Read-Only Inspection)
+```go
+import "github.com/randalmurphal/flowgraph/pkg/flowgraph/query"
+
+// Registry with built-in queries
+registry := query.NewRegistry()
+query.RegisterBuiltins(registry, func(ctx context.Context, targetID string) (*query.State, error) {
+    // Load state from your storage
+    return &query.State{TargetID: targetID, Status: "running", Progress: 0.5}, nil
+})
+
+// Execute queries
+executor := query.NewExecutor(registry, stateLoader)
+status, _ := executor.Execute(ctx, "run-123", query.QueryStatus, nil)
+progress, _ := executor.Execute(ctx, "run-123", query.QueryProgress, nil)
+
+// Built-in queries: status, progress, current_node, variables, pending_task, state
+```
+
+### Saga (Distributed Transactions)
+```go
+import "github.com/randalmurphal/flowgraph/pkg/flowgraph/saga"
+
+orch := saga.NewOrchestrator()
+orch.Register(&saga.Definition{
+    Name: "order-saga",
+    Steps: []saga.Step{
+        {Name: "create-order", Handler: createOrder, Compensation: cancelOrder},
+        {Name: "reserve-inventory", Handler: reserveInventory, Compensation: releaseInventory},
+        {Name: "charge-payment", Handler: chargePayment, Compensation: refundPayment},
+    },
+})
+
+// Start saga - runs async, compensates on failure
+exec, _ := orch.Start(ctx, "order-saga", orderInput)
+
+// Check status
+exec = orch.Get(exec.ID)
+fmt.Println(exec.Status) // completed, compensated, or failed
+
+// Manual compensation
+orch.Compensate(ctx, exec.ID, "manual rollback requested")
+```
 
 ---
 
