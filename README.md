@@ -210,6 +210,7 @@ github.com/randalmurphal/flowgraph/
 │   ├── checkpoint/           # Checkpoint storage
 │   ├── config/               # Type-safe configuration extraction
 │   ├── errors/               # Error categorization (Transient, Permanent, etc.)
+│   ├── event/                # Event infrastructure (bus, router, DLQ, aggregator)
 │   ├── expr/                 # Expression evaluation for conditions
 │   ├── llm/                  # LLM client interface
 │   │   ├── tokens/           # Token counting and budget management
@@ -218,7 +219,10 @@ github.com/randalmurphal/flowgraph/
 │   │   └── parser/           # LLM response parsing
 │   ├── model/                # Model interfaces
 │   ├── observability/        # Logging, metrics, tracing
+│   ├── query/                # Read-only workflow inspection (Temporal-inspired)
 │   ├── registry/             # Generic thread-safe registry
+│   ├── saga/                 # Saga pattern for distributed transactions
+│   ├── signal/               # Fire-and-forget signals (Temporal-inspired)
 │   └── template/             # Variable expansion (${var}, $var)
 ├── examples/                 # Working examples
 └── benchmarks/               # Performance benchmarks
