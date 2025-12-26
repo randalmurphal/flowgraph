@@ -8,11 +8,13 @@ import (
 
 // Regular expressions for variable patterns.
 var (
-	// bracePattern matches ${varname} - varname can contain alphanumeric and underscore.
-	bracePattern = regexp.MustCompile(`\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}`)
+	// bracePattern matches ${varname} or ${object.property} - supports dot notation for nested access.
+	// Variable names can contain alphanumeric, underscore, and dots for hierarchical access.
+	bracePattern = regexp.MustCompile(`\$\{([a-zA-Z_][a-zA-Z0-9_.]*)\}`)
 
 	// dollarPattern matches $varname where varname is followed by a non-word character
 	// or end of string. This prevents $port from matching inside $portNumber.
+	// Does not support dot notation to avoid ambiguity with sentence endings.
 	dollarPattern = regexp.MustCompile(`\$([a-zA-Z_][a-zA-Z0-9_]*)(?:\b|$)`)
 )
 
@@ -58,6 +60,11 @@ func NewExpander(opts ...Option) *Expander {
 // Errors are only returned when MissingAction is MissingError and
 // a variable is not found.
 //
+// Supports dot notation for nested object access:
+//
+//	exp.Expand("${user.name}", map[string]any{"user": map[string]any{"name": "Alice"}})
+//	// result: "Alice"
+//
 // Example:
 //
 //	exp := NewExpander()
@@ -76,7 +83,7 @@ func (e *Expander) Expand(s string, vars map[string]any) (string, error) {
 		result = bracePattern.ReplaceAllStringFunc(result, func(match string) string {
 			// Extract variable name from ${name}.
 			varName := match[2 : len(match)-1]
-			if val, ok := vars[varName]; ok {
+			if val, ok := lookupNested(vars, varName); ok {
 				return fmt.Sprintf("%v", val)
 			}
 			// Variable not found.
@@ -262,4 +269,41 @@ func ExpandMap(m map[string]any, vars map[string]any) map[string]any {
 	// Default expander never returns errors (MissingKeep).
 	result, _ := defaultExpander.ExpandMap(m, vars)
 	return result
+}
+
+// lookupNested looks up a potentially dotted variable name in vars.
+// Supports both flat keys (direct map lookup) and nested access (dot notation).
+//
+// For a name like "input.repo_url", it first tries direct lookup (vars["input.repo_url"]),
+// then falls back to nested lookup (vars["input"]["repo_url"]).
+//
+// This allows both flat variable naming and structured object access patterns.
+func lookupNested(vars map[string]any, name string) (any, bool) {
+	// First, try direct lookup (for flat variable names, including those with dots)
+	if val, ok := vars[name]; ok {
+		return val, true
+	}
+
+	// If name contains dots, try nested object access
+	if strings.Contains(name, ".") {
+		parts := strings.Split(name, ".")
+		current := any(vars)
+
+		for _, part := range parts {
+			switch m := current.(type) {
+			case map[string]any:
+				val, ok := m[part]
+				if !ok {
+					return nil, false
+				}
+				current = val
+			default:
+				// Current value is not a map, can't traverse further
+				return nil, false
+			}
+		}
+		return current, true
+	}
+
+	return nil, false
 }

@@ -562,3 +562,107 @@ func TestExpand_RealWorldScenarios(t *testing.T) {
 		assert.Equal(t, "production", metadata["namespace"])
 	})
 }
+
+// TestExpand_DotNotation tests nested object access via dot notation.
+func TestExpand_DotNotation(t *testing.T) {
+	t.Run("simple nested access", func(t *testing.T) {
+		vars := map[string]any{
+			"user": map[string]any{
+				"name":  "Alice",
+				"email": "alice@example.com",
+			},
+		}
+		result := Expand("Hello ${user.name} (${user.email})", vars)
+		assert.Equal(t, "Hello Alice (alice@example.com)", result)
+	})
+
+	t.Run("deeply nested access", func(t *testing.T) {
+		vars := map[string]any{
+			"config": map[string]any{
+				"database": map[string]any{
+					"connection": map[string]any{
+						"host": "localhost",
+						"port": 5432,
+					},
+				},
+			},
+		}
+		result := Expand("Connect to ${config.database.connection.host}:${config.database.connection.port}", vars)
+		assert.Equal(t, "Connect to localhost:5432", result)
+	})
+
+	t.Run("input prefix pattern", func(t *testing.T) {
+		// This is the pattern used by task-keeper flows
+		vars := map[string]any{
+			"input": map[string]any{
+				"task_id":     "TK-123",
+				"repo_url":    "https://github.com/example/repo",
+				"repo_branch": "main",
+			},
+		}
+		result := Expand("Cloning ${input.repo_url} branch ${input.repo_branch} for task ${input.task_id}", vars)
+		assert.Equal(t, "Cloning https://github.com/example/repo branch main for task TK-123", result)
+	})
+
+	t.Run("flat key takes precedence", func(t *testing.T) {
+		// If there's both a flat key and nested access possible, flat key wins
+		vars := map[string]any{
+			"user.name": "FlatValue", // Direct key with dot
+			"user": map[string]any{
+				"name": "NestedValue",
+			},
+		}
+		result := Expand("Name: ${user.name}", vars)
+		assert.Equal(t, "Name: FlatValue", result)
+	})
+
+	t.Run("missing nested key keeps placeholder", func(t *testing.T) {
+		vars := map[string]any{
+			"user": map[string]any{
+				"name": "Alice",
+			},
+		}
+		result := Expand("Email: ${user.email}", vars) // user.email doesn't exist
+		assert.Equal(t, "Email: ${user.email}", result)
+	})
+
+	t.Run("non-map intermediate value", func(t *testing.T) {
+		vars := map[string]any{
+			"user": "just a string", // Not a map
+		}
+		result := Expand("Name: ${user.name}", vars)
+		assert.Equal(t, "Name: ${user.name}", result)
+	})
+
+	t.Run("mixed flat and nested in same template", func(t *testing.T) {
+		vars := map[string]any{
+			"prefix": "LOG",
+			"event": map[string]any{
+				"type":   "error",
+				"source": "api",
+			},
+		}
+		result := Expand("[${prefix}] ${event.type} from ${event.source}", vars)
+		assert.Equal(t, "[LOG] error from api", result)
+	})
+
+	t.Run("dot notation with MissingError", func(t *testing.T) {
+		exp := NewExpander(WithMissingAction(MissingError))
+		vars := map[string]any{
+			"config": map[string]any{
+				"host": "localhost",
+			},
+		}
+		_, err := exp.Expand("Port: ${config.port}", vars) // config.port doesn't exist
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "config.port")
+	})
+
+	t.Run("empty nested map", func(t *testing.T) {
+		vars := map[string]any{
+			"config": map[string]any{},
+		}
+		result := Expand("Host: ${config.host}", vars)
+		assert.Equal(t, "Host: ${config.host}", result)
+	})
+}
