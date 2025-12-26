@@ -14,6 +14,7 @@
 | `pkg/flowgraph/checkpoint/` | State persistence | `Store`, `MemoryStore`, `SQLiteStore` |
 | `pkg/flowgraph/config/` | Type-safe config extraction | `Config`, `FromFile`, `FromYAML`, `FromJSON` |
 | `pkg/flowgraph/errors/` | Error handling strategies | `Category`, `RetryConfig`, `Handler` |
+| `pkg/flowgraph/event/` | Event-driven architecture | `Event`, `Router`, `Bus`, `DLQ`, `PoisonPillDetector` |
 | `pkg/flowgraph/expr/` | Expression evaluation | `Evaluator`, `Eval`, `BinaryOp` |
 | `pkg/flowgraph/llm/` | LLM client interface + credentials | `Client`, `ClaudeCLI`, `Credentials`, `MockClient` |
 | `pkg/flowgraph/llm/tokens/` | Token counting, budget, model limits | `Counter`, `Budget`, `ModelLimits` |
@@ -115,6 +116,47 @@ result := handler.Execute(ctx, model.ModelSonnet, func(ctx context.Context, m mo
 ```
 
 See `examples/` for complete working examples.
+
+---
+
+## Event-Driven Architecture
+
+The `event` package provides infrastructure for event-driven systems:
+
+```go
+import "github.com/randalmurphal/flowgraph/pkg/flowgraph/event"
+
+// Create typed events
+evt := event.New[UserCreated]("user.created", "auth-service", "tenant-1", payload)
+
+// Router with middleware
+router := event.NewRouter(event.RouterConfig{MaxDepth: 10})
+router.Use(event.RecoveryMiddleware())
+router.Use(event.LoggingMiddleware(logFn))
+router.Register(myHandler)
+
+derived, err := router.Route(ctx, evt)
+
+// Pub/sub bus
+bus := event.NewBus(event.BusConfig{BufferSize: 100})
+sub := bus.Subscribe([]string{"user.*"}, handler)
+bus.Publish(ctx, evt)
+
+// Dead Letter Queue with poison pill detection
+dlq := event.NewInMemoryDLQ(event.DLQConfig{MaxRetries: 5})
+detector := event.NewInMemoryPoisonPillDetector(event.InMemoryPoisonPillConfig{
+    FailureThreshold: 3,
+})
+dlqWithDetection := event.NewDLQWithPoisonPillDetection(dlq, detector)
+```
+
+**Key Features**:
+- Generic `BaseEvent[T]` with correlation IDs and versioning
+- Schema registry with validation and version compatibility
+- Middleware support (logging, recovery, metrics, correlation)
+- Fan-out pub/sub with deduplication
+- Fan-in aggregation (correlation, count, time-window based)
+- DLQ/PLQ with retry, exponential backoff, poison pill detection
 
 ---
 
