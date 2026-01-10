@@ -60,10 +60,26 @@ result, err := compiled.Run(ctx, state,
 result, err = compiled.Resume(ctx, store, "run-123")
 ```
 
-### With LLM
+### With LLM (via context injection)
 ```go
-client := llm.NewClaudeCLI()
-ctx := flowgraph.NewContext(context.Background(), flowgraph.WithLLM(client))
+import "github.com/randalmurphal/llmkit/claude"
+
+// Define context key and accessors (once per package)
+type llmKey struct{}
+func WithLLM(ctx context.Context, c claude.Client) context.Context {
+    return context.WithValue(ctx, llmKey{}, c)
+}
+func LLM(ctx context.Context) claude.Client {
+    if c, ok := ctx.Value(llmKey{}).(claude.Client); ok { return c }
+    return nil
+}
+
+// Inject client via context
+client := claude.NewClaudeCLI()
+baseCtx := WithLLM(context.Background(), client)
+ctx := flowgraph.NewContext(baseCtx)
+
+// Access in nodes via: client := LLM(ctx)
 ```
 
 ### LLM in Containers

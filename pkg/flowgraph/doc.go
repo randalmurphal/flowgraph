@@ -99,11 +99,26 @@ When resuming, execution continues from the node after the last checkpoint.
 
 # LLM Integration
 
-Use the LLM client interface for AI calls within nodes:
+Use LLM clients via Go's context.WithValue pattern:
 
+	// Context key for LLM client injection
+	type llmKey struct{}
+	func WithLLM(ctx context.Context, c claude.Client) context.Context {
+	    return context.WithValue(ctx, llmKey{}, c)
+	}
+	func LLM(ctx context.Context) claude.Client {
+	    if c, ok := ctx.Value(llmKey{}).(claude.Client); ok { return c }
+	    return nil
+	}
+
+	// In a node:
 	func generateSpec(ctx flowgraph.Context, s State) (State, error) {
-	    resp, err := ctx.LLM().Complete(ctx, llm.CompletionRequest{
-	        Messages: []llm.Message{{Role: llm.RoleUser, Content: s.Input}},
+	    client := LLM(ctx) // Access via context.Value
+	    if client == nil {
+	        return s, fmt.Errorf("LLM client not configured")
+	    }
+	    resp, err := client.Complete(ctx, claude.CompletionRequest{
+	        Messages: []claude.Message{{Role: claude.RoleUser, Content: s.Input}},
 	    })
 	    if err != nil {
 	        return s, err
@@ -112,15 +127,13 @@ Use the LLM client interface for AI calls within nodes:
 	    return s, nil
 	}
 
-	client := llm.NewClaudeCLI(
-	    llm.WithModel("sonnet"),
-	    llm.WithDangerouslySkipPermissions(),
-	    llm.WithMaxBudgetUSD(1.0),
-	)
-	ctx := flowgraph.NewContext(context.Background(), flowgraph.WithLLM(client))
+	// Configure client and inject via context
+	client := claude.NewClaudeCLI(...)
+	baseCtx := WithLLM(context.Background(), client)
+	ctx := flowgraph.NewContext(baseCtx)
 
-The Claude CLI client supports JSON output with full token tracking,
-session management, and budget controls.
+This keeps flowgraph decoupled from specific LLM implementations while
+supporting Claude CLI with JSON output, token tracking, and budget controls.
 
 # Observability
 

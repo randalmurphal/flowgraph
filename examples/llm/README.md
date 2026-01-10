@@ -1,12 +1,12 @@
 # LLM Integration Example
 
-This example demonstrates using the LLM client interface for AI-powered nodes.
+This example demonstrates using LLM clients with flowgraph via context injection.
 
 ## What It Shows
 
-- Configuring LLM client with `flowgraph.WithLLM(client)`
-- Accessing LLM from context with `ctx.LLM()`
-- Building completion requests with `llm.CompletionRequest`
+- Using `context.WithValue` to inject LLM clients
+- Defining context key and accessor functions
+- Building completion requests with `claude.CompletionRequest`
 - Handling responses with token tracking
 - Using `MockClient` for testing
 
@@ -45,23 +45,33 @@ Total LLM calls made: 3
 
 ## Key Concepts
 
-1. **LLM interface**: `llm.Client` with `Complete()` and `Stream()` methods
-2. **Context integration**: Pass client via `WithLLM()` option
+1. **LLM interface**: `claude.Client` with `Complete()` and `Stream()` methods
+2. **Context injection**: Pass client via `context.WithValue` pattern
 3. **MockClient**: For testing without actual API calls
 4. **ClaudeCLI**: Production client for Claude CLI
 
 ## Production Configuration
 
 ```go
+import "github.com/randalmurphal/llmkit/claude"
+
+// Context key and accessor (define once per package)
+type llmKey struct{}
+func WithLLM(ctx context.Context, c claude.Client) context.Context {
+    return context.WithValue(ctx, llmKey{}, c)
+}
+
 // Full-featured Claude CLI client
-client := llm.NewClaudeCLI(
-    llm.WithModel("sonnet"),
-    llm.WithOutputFormat(llm.OutputFormatJSON),
-    llm.WithDangerouslySkipPermissions(),
-    llm.WithMaxBudgetUSD(1.0),
-    llm.WithSessionID("workflow-123"),
-    llm.WithSettingSources([]string{"project", "local"}),
+client := claude.NewClaudeCLI(
+    claude.WithModel("sonnet"),
+    claude.WithOutputFormat(claude.OutputFormatJSON),
+    claude.WithDangerouslySkipPermissions(),
+    claude.WithMaxBudgetUSD(1.0),
 )
+
+// Inject into context
+baseCtx := WithLLM(context.Background(), client)
+ctx := flowgraph.NewContext(baseCtx)
 ```
 
 ## Available Client Options

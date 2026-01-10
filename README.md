@@ -128,24 +128,41 @@ result, err = compiled.Resume(ctx, store, "run-123")
 
 ## LLM Integration
 
-Use Claude CLI with full token tracking:
+Use Claude CLI with full token tracking via context injection:
 
 ```go
-import "github.com/randalmurphal/flowgraph/pkg/flowgraph/llm"
+import "github.com/randalmurphal/llmkit/claude"
 
-client := llm.NewClaudeCLI(
-    llm.WithModel("sonnet"),
-    llm.WithOutputFormat(llm.OutputFormatJSON),
-    llm.WithDangerouslySkipPermissions(),
-    llm.WithMaxBudgetUSD(1.0),
+// Context key for LLM client
+type llmKey struct{}
+func WithLLM(ctx context.Context, c claude.Client) context.Context {
+    return context.WithValue(ctx, llmKey{}, c)
+}
+func LLM(ctx context.Context) claude.Client {
+    if c, ok := ctx.Value(llmKey{}).(claude.Client); ok { return c }
+    return nil
+}
+
+// Configure client
+client := claude.NewClaudeCLI(
+    claude.WithModel("sonnet"),
+    claude.WithOutputFormat(claude.OutputFormatJSON),
+    claude.WithDangerouslySkipPermissions(),
+    claude.WithMaxBudgetUSD(1.0),
 )
 
-ctx := flowgraph.NewContext(context.Background(), flowgraph.WithLLM(client))
+baseCtx := WithLLM(context.Background(), client)
+ctx := flowgraph.NewContext(baseCtx)
 
 // In a node:
 func generateSpec(ctx flowgraph.Context, s State) (State, error) {
-    resp, err := ctx.LLM().Complete(ctx, llm.CompletionRequest{
-        Messages: []llm.Message{{Role: llm.RoleUser, Content: s.Prompt}},
+    client := LLM(ctx) // Access via context.Value
+    if client == nil {
+        return s, fmt.Errorf("LLM client not configured")
+    }
+
+    resp, err := client.Complete(ctx, claude.CompletionRequest{
+        Messages: []claude.Message{{Role: claude.RoleUser, Content: s.Prompt}},
     })
     if err != nil {
         return s, err
