@@ -6,7 +6,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/randalmurphal/flowgraph/pkg/flowgraph/checkpoint"
-	"github.com/randalmurphal/llmkit/claude"
 )
 
 // Context provides execution context to nodes.
@@ -22,10 +21,6 @@ type Context interface {
 	// Logger returns the configured logger, enriched with run and node context.
 	// Never returns nil - defaults to slog.Default() if not configured.
 	Logger() *slog.Logger
-
-	// LLM returns the LLM client, or nil if not configured.
-	// Nodes should check for nil before using.
-	LLM() claude.Client
 
 	// Checkpointer returns the checkpoint store, or nil if not configured.
 	// Nodes should check for nil before using.
@@ -50,7 +45,6 @@ type executionContext struct {
 	context.Context
 
 	logger       *slog.Logger
-	llmClient    claude.Client
 	checkpointer checkpoint.Store
 	runID        string
 	nodeID       string
@@ -60,11 +54,6 @@ type executionContext struct {
 // Logger returns the configured logger.
 func (c *executionContext) Logger() *slog.Logger {
 	return c.logger
-}
-
-// LLM returns the LLM client.
-func (c *executionContext) LLM() claude.Client {
-	return c.llmClient
 }
 
 // Checkpointer returns the checkpoint store.
@@ -95,13 +84,6 @@ type ContextOption func(*executionContext)
 func WithLogger(logger *slog.Logger) ContextOption {
 	return func(c *executionContext) {
 		c.logger = logger
-	}
-}
-
-// WithLLM sets the LLM client for the context.
-func WithLLM(client claude.Client) ContextOption {
-	return func(c *executionContext) {
-		c.llmClient = client
 	}
 }
 
@@ -152,7 +134,6 @@ func (c *executionContext) withNodeID(nodeID string) *executionContext {
 	return &executionContext{
 		Context:      c.Context,
 		logger:       c.logger.With("run_id", c.runID, "node_id", nodeID, "attempt", c.attempt),
-		llmClient:    c.llmClient,
 		checkpointer: c.checkpointer,
 		runID:        c.runID,
 		nodeID:       nodeID,

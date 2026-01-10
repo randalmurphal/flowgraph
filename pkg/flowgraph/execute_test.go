@@ -554,7 +554,6 @@ func TestContext_DefaultValues(t *testing.T) {
 	ctx := NewContext(context.Background())
 
 	assert.NotNil(t, ctx.Logger())
-	assert.Nil(t, ctx.LLM())
 	assert.Nil(t, ctx.Checkpointer())
 	assert.NotEmpty(t, ctx.RunID())
 	assert.Equal(t, "", ctx.NodeID())

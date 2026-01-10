@@ -17,14 +17,6 @@ func TestWithLogger(t *testing.T) {
 	assert.Same(t, logger, ctx.Logger())
 }
 
-// TestWithLLM tests WithLLM option.
-func TestWithLLM(t *testing.T) {
-	// Since LLMClient is an interface with no methods yet,
-	// we can't really test this meaningfully, but we verify the option works
-	ctx := NewContext(context.Background(), WithLLM(nil))
-	assert.Nil(t, ctx.LLM())
-}
-
 // TestWithCheckpointer tests WithCheckpointer option.
 func TestWithCheckpointer(t *testing.T) {
 	// Since CheckpointStore is an interface with no methods yet,

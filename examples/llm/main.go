@@ -1,7 +1,8 @@
-// Example: LLM integration
+// Example: LLM integration via context values
 //
-// This example demonstrates using the LLM client interface with MockClient.
-// In production, you would use ClaudeCLI or another implementation.
+// This example demonstrates how to use LLM clients with flowgraph by
+// passing them through Go's context.WithValue. This approach keeps
+// flowgraph decoupled from specific LLM implementations.
 package main
 
 import (
@@ -21,10 +22,26 @@ type State struct {
 	Model      string
 }
 
+// llmKey is the context key for the LLM client.
+type llmKey struct{}
+
+// WithLLM adds an LLM client to the context.
+func WithLLM(ctx context.Context, client claude.Client) context.Context {
+	return context.WithValue(ctx, llmKey{}, client)
+}
+
+// LLM retrieves the LLM client from context.
+func LLM(ctx context.Context) claude.Client {
+	if c, ok := ctx.Value(llmKey{}).(claude.Client); ok {
+		return c
+	}
+	return nil
+}
+
 // generateAnswer uses the LLM to answer the question.
 func generateAnswer(ctx flowgraph.Context, s State) (State, error) {
-	// Access LLM client from context
-	client := ctx.LLM()
+	// Access LLM client from underlying context
+	client := LLM(ctx)
 	if client == nil {
 		return s, fmt.Errorf("LLM client not configured")
 	}
@@ -67,11 +84,9 @@ func main() {
 		log.Fatal("compile error:", err)
 	}
 
-	// Create context with LLM client
-	ctx := flowgraph.NewContext(
-		context.Background(),
-		flowgraph.WithLLM(mockClient),
-	)
+	// Create context with LLM client via context.WithValue
+	baseCtx := WithLLM(context.Background(), mockClient)
+	ctx := flowgraph.NewContext(baseCtx)
 
 	// Run with different questions
 	questions := []string{
@@ -98,7 +113,7 @@ func main() {
 
 	// Show how to use ClaudeCLI in production
 	fmt.Println("\n=== Production Configuration ===")
-	fmt.Println("Replace MockClient with ClaudeCLI:")
+	fmt.Println("Use context.WithValue to inject LLM client:")
 	fmt.Print(`
 client := claude.NewClaudeCLI(
     claude.WithModel("sonnet"),
@@ -107,6 +122,7 @@ client := claude.NewClaudeCLI(
     claude.WithMaxBudgetUSD(1.0),
 )
 
-ctx := flowgraph.NewContext(context.Background(), flowgraph.WithLLM(client))
+baseCtx := WithLLM(context.Background(), client)
+ctx := flowgraph.NewContext(baseCtx)
 `)
 }
